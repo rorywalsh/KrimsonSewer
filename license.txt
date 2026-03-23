@@ -1,0 +1,11 @@
+Model Information:
+* title:	The Charterhouse Chapel Cloister
+* source:	https://sketchfab.com/3d-models/the-charterhouse-chapel-cloister-534bb12eed304ecfa1f6570717935c88
+* author:	artfletch (https://sketchfab.com/artfletch)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "The Charterhouse Chapel Cloister" (https://sketchfab.com/3d-models/the-charterhouse-chapel-cloister-534bb12eed304ecfa1f6570717935c88) by artfletch (https://sketchfab.com/artfletch) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

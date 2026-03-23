@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>Babylon.js sample code</title>
+    <!-- Babylon.js -->
+    <script src="https://code.jquery.com/pep/0.4.2/pep.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/ammo.js"></script>
+    <script src="https://preview.babylonjs.com/cannon.js"></script>
+    <script src="https://preview.babylonjs.com/Oimo.js"></script>
+    <script src="https://preview.babylonjs.com/earcut.min.js"></script>
+    <script src="https://preview.babylonjs.com/babylon.js"></script>
+    <script src="https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://preview.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://preview.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <!-- <script src="audio.js"></script> -->
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function () {
+            return new BABYLON.Engine(canvas, true, {
+                preserveDrawingBuffer: true,
+                stencil: true,
+                disableWebGL2Support: false
+            });
+        };
+
+
+        // You have to create a function called createScene. This function must return a BABYLON.Scene object
+        // You can reference the following variables: engine, canvas
+        // You must at least define a camera
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            scene.useRightHandedSystem = true;
+            scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
+            engine.displayLoadingUI();
+            BABYLON.Mesh.checkCollisions = true;
+
+            // Dim ambient light
+            var hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+            hemiLight.intensity = 0.02;
+
+            // Torch spotlight
+            var torch = new BABYLON.SpotLight("torch", BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(), Math.PI / 3, 2, scene);
+            torch.intensity = 1000;
+            torch.range = 100;
+            torch.diffuse = new BABYLON.Color3(1, 0.9, 0.7);
+            torch.specular = new BABYLON.Color3(1, 0.9, 0.7);
+
+            let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(-73, -12, -46), scene);
+            camera.attachControl(canvas, true);
+
+            camera.keysUp.push(87); //W
+            camera.keysDown.push(83) //S
+            camera.keysLeft.push(65); //A
+            camera.keysRight.push(68); //D
+            camera.setTarget(new BABYLON.Vector3(-73, -12, -100));
+            camera.speed = 0.1;
+            camera.angularSensibilityX = 20;
+            camera.angularSensibilityZ = 2000;
+
+            BABYLON.SceneLoader.ImportMesh("", "./", "krimson_city_sewers.glb", scene, function (newMeshes) {
+                console.log("loaded textures/models");
+
+                // Force materials to respond to spotlight
+                newMeshes.forEach(function (mesh) {
+                    if (mesh.material) {
+                        // For PBR materials, ensure they respond to lights
+                        if (mesh.material.getClassName() === "PBRMaterial") {
+                            mesh.material.directIntensity = 1.0;
+                            mesh.material.environmentIntensity = 0.0;
+                        }
+                        mesh.material.maxSimultaneousLights = 4;
+                    }
+                });
+
+                setTimeout(function () {
+                    engine.hideLoadingUI();
+                }, 2000);
+            });
+
+            var playerHeight = 2;
+            var rayLength = 1000;
+            var collisionDistance = 1.5;
+
+            scene.registerBeforeRender(function () {
+                // Update torch position and direction to follow camera
+                torch.position = camera.position.clone();
+                torch.direction = camera.getForwardRay().direction;
+
+                // Downward raycast for floor
+                var downRay = new BABYLON.Ray(camera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
+                var downHit = scene.pickWithRay(downRay);
+                if (downHit.pickedMesh) {
+                    camera.position.y = downHit.pickedPoint.y + playerHeight;
+                }
+
+                // Get camera's forward direction (ignoring Y)
+                var forward = camera.getDirection(BABYLON.Vector3.Forward());
+                forward.y = 0;
+                forward.normalize();
+
+                // Calculate right direction
+                var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
+                right.normalize();
+
+                // Left and backward directions
+                var left = right.scale(-1);
+                var backward = forward.scale(-1);
+
+                // Raycast forward
+                var forwardRay = new BABYLON.Ray(camera.position, forward, collisionDistance);
+                var forwardHit = scene.pickWithRay(forwardRay);
+                if (forwardHit.pickedMesh && forwardHit.distance < collisionDistance) {
+                    camera.position.addInPlace(backward.scale(collisionDistance - forwardHit.distance));
+                }
+
+                // Raycast backward
+                var backwardRay = new BABYLON.Ray(camera.position, backward, collisionDistance);
+                var backwardHit = scene.pickWithRay(backwardRay);
+                if (backwardHit.pickedMesh && backwardHit.distance < collisionDistance) {
+                    camera.position.addInPlace(forward.scale(collisionDistance - backwardHit.distance));
+                }
+
+                // Raycast right
+                var rightRay = new BABYLON.Ray(camera.position, right, collisionDistance);
+                var rightHit = scene.pickWithRay(rightRay);
+                if (rightHit.pickedMesh && rightHit.distance < collisionDistance) {
+                    camera.position.addInPlace(left.scale(collisionDistance - rightHit.distance));
+                }
+
+                // Raycast left
+                var leftRay = new BABYLON.Ray(camera.position, left, collisionDistance);
+                var leftHit = scene.pickWithRay(leftRay);
+                if (leftHit.pickedMesh && leftHit.distance < collisionDistance) {
+                    camera.position.addInPlace(right.scale(collisionDistance - leftHit.distance));
+                }
+
+                textInfo.text = "Player's position X:" + (camera.position.x).toFixed(2) + " Z:" + (camera.position.z).toFixed(2) + " Y:" + (camera.position.y).toFixed(2);
+            });
+
+
+
+            // GUI
+            let GUIInfo = "Player's position";
+            var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+            var stackPanel = new BABYLON.GUI.StackPanel();
+            stackPanel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+            stackPanel.isVertical = true;
+            advancedTexture.addControl(stackPanel);
+
+            var textInfo = new BABYLON.GUI.TextBlock();
+            textInfo.color = "white";
+            textInfo.fontSize = 16;
+            textInfo.height = "30px";
+            stackPanel.addControl(textInfo);
+
+            return scene;
+        };
+
+
+
+        var engine;
+        var scene;
+        initFunction = async function () {
+            var asyncEngineCreation = async function () {
+                try {
+                    return createDefaultEngine();
+                } catch (e) {
+                    console.log("the available createEngine function failed. Creating the default engine instead");
+                    return createDefaultEngine();
+                }
+            }
+
+            engine = await asyncEngineCreation();
+            if (!engine) throw 'engine should not be null.';
+            scene = createScene();
+        };
+        initFunction().then(() => {
+            sceneToRender = scene
+            engine.runRenderLoop(function () {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>
