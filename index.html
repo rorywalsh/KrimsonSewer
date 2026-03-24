@@ -94,6 +94,7 @@
                 console.log("loaded textures/models");
 
                 // Force materials to respond to spotlight
+                var sewersToMerge = [];
                 newMeshes.forEach(function (mesh) {
                     if (mesh.material) {
                         // For PBR materials, ensure they respond to lights
@@ -103,7 +104,30 @@
                         }
                         mesh.material.maxSimultaneousLights = 4;
                     }
+                    if (mesh.name.indexOf("Sewers_") === 0) {
+                        sewersToMerge.push(mesh);
+                    }
                 });
+
+                // Build invisible collision meshes for raycasting — originals stay visible with textures intact
+                // Group by vertex attribute signature so only compatible meshes are merged together
+                if (sewersToMerge.length > 0) {
+                    var groups = {};
+                    sewersToMerge.forEach(function (mesh) {
+                        mesh.isPickable = false;
+                        var key = mesh.getVerticesDataKinds().slice().sort().join("|");
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(mesh);
+                    });
+                    Object.keys(groups).forEach(function (key, i) {
+                        var merged = BABYLON.Mesh.MergeMeshes(groups[key], false, true);
+                        if (merged) {
+                            merged.name = "sewers_collision_" + i;
+                            merged.isVisible = false;
+                            merged.isPickable = true;
+                        }
+                    });
+                }
 
                 setTimeout(function () {
                     engine.hideLoadingUI();
