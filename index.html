@@ -36,14 +36,37 @@
             height: 100%;
             touch-action: none;
         }
+
+        #editTextarea {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            height: 200px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid white;
+            display: none;
+            z-index: 1000;
+        }
     </style>
 </head>
 
 <body>
     <canvas id="renderCanvas"></canvas>
+    <textarea id="editTextarea"
+        placeholder="Coordinates will appear here when you press spacebar in edit mode"></textarea>
     <!-- <script src="audio.js"></script> -->
     <script>
         var canvas = document.getElementById("renderCanvas");
+        var editTextarea = document.getElementById("editTextarea");
+        var isEditMode = false;
+        var universalCamera = null;
+        var arcRotateCamera = null;
+        var hemiLight = null;
+        var torch = null;
 
         var engine = null;
         var scene = null;
@@ -68,27 +91,40 @@
             BABYLON.Mesh.checkCollisions = true;
 
             // Dim ambient light
-            var hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+            hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
             hemiLight.intensity = 0.02;
 
             // Torch spotlight
-            var torch = new BABYLON.SpotLight("torch", BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(), Math.PI / 3, 2, scene);
+            torch = new BABYLON.SpotLight("torch", BABYLON.Vector3.Zero(), BABYLON.Vector3.Forward(), Math.PI / 3, 2, scene);
             torch.intensity = 1000;
             torch.range = 100;
             torch.diffuse = new BABYLON.Color3(1, 0.9, 0.7);
             torch.specular = new BABYLON.Color3(1, 0.9, 0.7);
 
-            let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(-73, -12, -46), scene);
-            camera.attachControl(canvas, true);
+            universalCamera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(-73, -12, -46), scene);
+            universalCamera.attachControl(canvas, true);
 
-            camera.keysUp.push(87); //W
-            camera.keysDown.push(83) //S
-            camera.keysLeft.push(65); //A
-            camera.keysRight.push(68); //D
-            camera.setTarget(new BABYLON.Vector3(-73, -12, -100));
-            camera.speed = 0.1;
-            camera.angularSensibilityX = 20;
-            camera.angularSensibilityZ = 2000;
+            universalCamera.keysUp.push(87); //W
+            universalCamera.keysDown.push(83) //S
+            universalCamera.keysLeft.push(65); //A
+            universalCamera.keysRight.push(68); //D
+            universalCamera.setTarget(new BABYLON.Vector3(-73, -12, -100));
+            universalCamera.speed = 0.1;
+            universalCamera.angularSensibilityX = 20;
+            universalCamera.angularSensibilityZ = 2000;
+
+            // Create ArcRotateCamera for edit mode
+            arcRotateCamera = new BABYLON.ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, 50, new BABYLON.Vector3(-73, -12, -73), scene);
+            arcRotateCamera.attachControl(canvas, true);
+            arcRotateCamera.wheelPrecisionX = 0.1;
+            arcRotateCamera.wheelPrecisionY = 0.1;
+            arcRotateCamera.wheelPrecisionZ = 0.1;
+            arcRotateCamera.lowerRadiusLimit = 0.1;
+            arcRotateCamera.upperRadiusLimit = 1000;
+            arcRotateCamera.panningSensibility = 50; // Make panning more sensitive
+
+            // Set initial camera to universal
+            scene.activeCamera = universalCamera;
 
             BABYLON.SceneLoader.ImportMesh("", "./", "krimson_city_sewers.glb", scene, function (newMeshes) {
                 console.log("loaded textures/models");
@@ -140,58 +176,60 @@
 
             scene.registerBeforeRender(function () {
                 // Update torch position and direction to follow camera
-                torch.position = camera.position.clone();
-                torch.direction = camera.getForwardRay().direction;
+                torch.position = scene.activeCamera.position.clone();
+                torch.direction = scene.activeCamera.getForwardRay().direction;
 
-                // Downward raycast for floor
-                var downRay = new BABYLON.Ray(camera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
-                var downHit = scene.pickWithRay(downRay);
-                if (downHit.pickedMesh) {
-                    camera.position.y = downHit.pickedPoint.y + playerHeight;
+                if (!isEditMode) {
+                    // Downward raycast for floor
+                    var downRay = new BABYLON.Ray(scene.activeCamera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
+                    var downHit = scene.pickWithRay(downRay);
+                    if (downHit.pickedMesh) {
+                        scene.activeCamera.position.y = downHit.pickedPoint.y + playerHeight;
+                    }
+
+                    // Get camera's forward direction (ignoring Y)
+                    var forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
+                    forward.y = 0;
+                    forward.normalize();
+
+                    // Calculate right direction
+                    var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
+                    right.normalize();
+
+                    // Left and backward directions
+                    var left = right.scale(-1);
+                    var backward = forward.scale(-1);
+
+                    // Raycast forward
+                    var forwardRay = new BABYLON.Ray(scene.activeCamera.position, forward, collisionDistance);
+                    var forwardHit = scene.pickWithRay(forwardRay);
+                    if (forwardHit.pickedMesh && forwardHit.distance < collisionDistance) {
+                        scene.activeCamera.position.addInPlace(backward.scale(collisionDistance - forwardHit.distance));
+                    }
+
+                    // Raycast backward
+                    var backwardRay = new BABYLON.Ray(scene.activeCamera.position, backward, collisionDistance);
+                    var backwardHit = scene.pickWithRay(backwardRay);
+                    if (backwardHit.pickedMesh && backwardHit.distance < collisionDistance) {
+                        scene.activeCamera.position.addInPlace(forward.scale(collisionDistance - backwardHit.distance));
+                    }
+
+                    // Raycast right
+                    var rightRay = new BABYLON.Ray(scene.activeCamera.position, right, collisionDistance);
+                    var rightHit = scene.pickWithRay(rightRay);
+                    if (rightHit.pickedMesh && rightHit.distance < collisionDistance) {
+                        scene.activeCamera.position.addInPlace(left.scale(collisionDistance - rightHit.distance));
+                    }
+
+                    // Raycast left
+                    var leftRay = new BABYLON.Ray(scene.activeCamera.position, left, collisionDistance);
+                    var leftHit = scene.pickWithRay(leftRay);
+                    if (leftHit.pickedMesh && leftHit.distance < collisionDistance) {
+                        scene.activeCamera.position.addInPlace(right.scale(collisionDistance - leftHit.distance));
+                    }
                 }
 
-                // Get camera's forward direction (ignoring Y)
-                var forward = camera.getDirection(BABYLON.Vector3.Forward());
-                forward.y = 0;
-                forward.normalize();
-
-                // Calculate right direction
-                var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
-                right.normalize();
-
-                // Left and backward directions
-                var left = right.scale(-1);
-                var backward = forward.scale(-1);
-
-                // Raycast forward
-                var forwardRay = new BABYLON.Ray(camera.position, forward, collisionDistance);
-                var forwardHit = scene.pickWithRay(forwardRay);
-                if (forwardHit.pickedMesh && forwardHit.distance < collisionDistance) {
-                    camera.position.addInPlace(backward.scale(collisionDistance - forwardHit.distance));
-                }
-
-                // Raycast backward
-                var backwardRay = new BABYLON.Ray(camera.position, backward, collisionDistance);
-                var backwardHit = scene.pickWithRay(backwardRay);
-                if (backwardHit.pickedMesh && backwardHit.distance < collisionDistance) {
-                    camera.position.addInPlace(forward.scale(collisionDistance - backwardHit.distance));
-                }
-
-                // Raycast right
-                var rightRay = new BABYLON.Ray(camera.position, right, collisionDistance);
-                var rightHit = scene.pickWithRay(rightRay);
-                if (rightHit.pickedMesh && rightHit.distance < collisionDistance) {
-                    camera.position.addInPlace(left.scale(collisionDistance - rightHit.distance));
-                }
-
-                // Raycast left
-                var leftRay = new BABYLON.Ray(camera.position, left, collisionDistance);
-                var leftHit = scene.pickWithRay(leftRay);
-                if (leftHit.pickedMesh && leftHit.distance < collisionDistance) {
-                    camera.position.addInPlace(right.scale(collisionDistance - leftHit.distance));
-                }
-
-                textInfo.text = "Player's position X:" + (camera.position.x).toFixed(2) + " Z:" + (camera.position.z).toFixed(2) + " Y:" + (camera.position.y).toFixed(2);
+                textInfo.text = "Player's position X:" + (scene.activeCamera.position.x).toFixed(2) + " Z:" + (scene.activeCamera.position.z).toFixed(2) + " Y:" + (scene.activeCamera.position.y).toFixed(2) + (isEditMode ? " [EDIT MODE]" : "");
             });
 
 
@@ -236,6 +274,56 @@
             engine.runRenderLoop(function () {
                 if (sceneToRender && sceneToRender.activeCamera) {
                     sceneToRender.render();
+                }
+            });
+
+            // Add key event listeners for edit mode
+            var wheelListener = function (e) {
+                e.preventDefault();
+                arcRotateCamera.radius += e.deltaY * 0.01;
+                arcRotateCamera.radius = Math.max(0.1, Math.min(1000, arcRotateCamera.radius));
+            };
+            window.addEventListener('keydown', function (event) {
+                // Ctrl+E to toggle edit mode
+                if (event.ctrlKey && event.key === 'e') {
+                    event.preventDefault();
+                    isEditMode = !isEditMode;
+                    if (isEditMode) {
+                        // Switch to ArcRotateCamera
+                        var currentPos = scene.activeCamera.position;
+                        var currentTarget = scene.activeCamera.getTarget ? scene.activeCamera.getTarget() : new BABYLON.Vector3(-73, -12, -73);
+                        arcRotateCamera.setTarget(currentTarget);
+                        arcRotateCamera.radius = 100; // Zoom out further
+                        // Set alpha and beta to match current view direction
+                        var direction = currentPos.subtract(currentTarget).normalize();
+                        arcRotateCamera.alpha = Math.atan2(direction.x, direction.z);
+                        arcRotateCamera.beta = Math.acos(direction.y);
+                        scene.activeCamera = arcRotateCamera;
+                        // Change to world light
+                        torch.intensity = 0;
+                        hemiLight.intensity = 2.0;
+                        editTextarea.style.display = 'block';
+                        // Add wheel listener to textarea
+                        editTextarea.addEventListener('wheel', wheelListener, { passive: false });
+                    } else {
+                        // Switch back to UniversalCamera
+                        scene.activeCamera = universalCamera;
+                        // Change back to torch light
+                        torch.intensity = 1000;
+                        hemiLight.intensity = 0.02;
+                        editTextarea.style.display = 'none';
+                        // Remove wheel listener
+                        editTextarea.removeEventListener('wheel', wheelListener);
+                    }
+                }
+
+                // Spacebar to add coordinates in edit mode
+                if (isEditMode && event.key === ' ') {
+                    event.preventDefault();
+                    var pos = scene.activeCamera.position;
+                    var coord = pos.x.toFixed(2) + ', ' + pos.y.toFixed(2) + ', ' + pos.z.toFixed(2);
+                    editTextarea.value += coord + '\n';
+                    editTextarea.scrollTop = editTextarea.scrollHeight;
                 }
             });
         });
