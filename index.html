@@ -21,7 +21,8 @@
     <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
     <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
     <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
-
+    <script src="audioClasses.js"></script> 
+    
     <style>
         html,
         body {
@@ -38,33 +39,205 @@
             touch-action: none;
         }
 
-        #editTextarea {
+        #editPanel {
             touch-action: none;
             position: absolute;
-            bottom: 10px;
+            top: 10px;
             right: 10px;
-            width: 300px;
-            height: 200px;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
+            width: 280px;
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            background: rgba(0,0,0,0.9);
+            color: #e0e0e0;
             font-family: monospace;
             font-size: 12px;
-            border: 1px solid white;
+            border: 1px solid #444;
             display: none;
+            flex-direction: column;
             z-index: 1000;
+            box-sizing: border-box;
+        }
+        #editPanel .ep-header {
+            padding: 8px 10px;
+            background: #111;
+            border-bottom: 1px solid #444;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+        }
+        #editPanel .ep-hint { color: #555; font-size: 10px; font-weight: normal; }
+        #editPanel .ep-section { padding: 8px 10px; border-bottom: 1px solid #1e1e1e; }
+        #editPanel .ep-label {
+            display: block;
+            margin-bottom: 4px;
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        #editPanel .ep-toggle label { margin-right: 12px; cursor: pointer; color: #ccc; }
+        #editPanel input[type="text"] {
+            width: 100%;
+            background: #111;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 4px 6px;
+            box-sizing: border-box;
+        }
+        #editPanel input[type="range"] { width: 100%; cursor: pointer; margin-top: 2px; }
+        #editPanel .ep-row { display: flex; justify-content: space-between; align-items: center; }
+        #editPanel #soundList { max-height: 130px; overflow-y: auto; }
+        #editPanel .sound-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 2px;
+            border-bottom: 1px solid #1a1a1a;
+            cursor: pointer;
+            font-size: 11px;
+            gap: 4px;
+        }
+        #editPanel .sound-item:hover { background: #111; }
+        #editPanel .sound-item.selected { color: #ff44ff; background: #1a0022; border-left: 2px solid #cc00cc; }
+        #editPanel .ep-xyz { display: flex; gap: 4px; margin-top: 4px; }
+        #editPanel .ep-xyz label { flex: 1; color: #888; font-size: 10px; display: flex; flex-direction: column; gap: 2px; cursor: ew-resize; user-select: none; }
+        #editPanel .ep-xyz input[type="number"] { cursor: text; }
+        #editPanel .ep-xyz input[type="number"] {
+            width: 100%;
+            background: #111;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 3px 4px;
+            box-sizing: border-box;
+        }
+        #editPanel .si-badge {
+            font-size: 9px;
+            padding: 1px 3px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        #editPanel .si-badge.area { background: #003333; color: #00cccc; }
+        #editPanel .si-badge.oneshot { background: #332200; color: #ffaa00; }
+        #editPanel .si-info { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #editPanel .si-del {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 0 2px;
+            line-height: 1;
+        }
+        #editPanel .si-del:hover { color: #ff4444; }
+        #editPanel .ep-actions { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #1e1e1e; }
+        #editPanel .ep-actions button {
+            flex: 1;
+            padding: 5px;
+            background: #111;
+            border: 1px solid #444;
+            color: #ccc;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        #editPanel .ep-actions button:hover { background: #222; border-color: #888; }
+        #editingBar {
+            padding: 5px 10px;
+            background: #002222;
+            border-bottom: 1px solid #005555;
+            color: #00cccc;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #editingBar button {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 0;
+        }
+        #editingBar button:hover { color: #aaa; }
+        #editPanel #codeOutput {
+            width: 100%;
+            height: 90px;
+            background: #080808;
+            border: none;
+            border-top: 1px solid #1e1e1e;
+            color: #66ff66;
+            font-family: monospace;
+            font-size: 10px;
+            resize: vertical;
+            box-sizing: border-box;
+            padding: 6px 10px;
         }
     </style>
 </head>
 
 <body>
     <canvas id="renderCanvas"></canvas>
-    <textarea id="editTextarea"
-        placeholder="Coordinates will appear here when you press spacebar in edit mode"></textarea>
+    <div id="editPanel">
+        <div class="ep-header">SOUND EDITOR <span class="ep-hint">Ctrl+E to exit</span></div>
+        <div id="editingBar" style="display:none"></div>
+        <div class="ep-section">
+            <span class="ep-label">Type</span>
+            <div class="ep-toggle">
+                <label><input type="radio" name="soundType" value="AreaSound" checked> AreaSound</label>
+                <label><input type="radio" name="soundType" value="OneShotCollisionSound"> OneShotCollision</label>
+            </div>
+        </div>
+        <div class="ep-section">
+            <span class="ep-label">File <span class="ep-hint">(comma-separate for multiple)</span></span>
+            <input type="text" id="soundFile" placeholder="./assets/ambient.wav">
+        </div>
+        <div class="ep-section">
+            <div class="ep-row"><span class="ep-label">Volume</span><span id="volumeVal">0.5</span></div>
+            <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5">
+        </div>
+        <div id="areaOptions" class="ep-section">
+            <div class="ep-row"><span class="ep-label">Rolloff</span><span id="rolloffVal">5</span></div>
+            <input type="range" id="soundRolloff" min="1" max="20" step="0.5" value="5">
+        </div>
+        <div id="oneShotOptions" class="ep-section" style="display:none">
+            <div class="ep-row"><span class="ep-label">Width</span><span id="widthVal">3</span></div>
+            <input type="range" id="soundWidth" min="0.5" max="20" step="0.5" value="3">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Cooldown (ms)</span><span id="cooldownVal">2000</span></div>
+            <input type="range" id="soundCooldown" min="500" max="10000" step="500" value="2000">
+        </div>
+        <div id="positionControls" class="ep-section" style="display:none">
+            <span class="ep-label">Position</span>
+            <div class="ep-xyz">
+                <label>X<input type="number" id="posX" step="0.1"></label>
+                <label>Y<input type="number" id="posY" step="0.1"></label>
+                <label>Z<input type="number" id="posZ" step="0.1"></label>
+            </div>
+        </div>
+        <div class="ep-section ep-hint" style="text-align:center;padding:6px 10px">Press SPACE to place at camera position</div>
+        <div class="ep-section">
+            <div class="ep-row"><span class="ep-label">Placed Sounds</span><span id="soundCount" class="ep-hint">0</span></div>
+            <div id="soundList"></div>
+        </div>
+        <div class="ep-actions">
+            <button id="copyCodeBtn">Copy Code</button>
+            <button id="clearAllBtn">Clear All</button>
+        </div>
+        <textarea id="codeOutput" readonly placeholder="// Code appears here — click to select all"></textarea>
+    </div>
     <!-- <script src="audio.js"></script> -->
     <script>
         var canvas = document.getElementById("renderCanvas");
-        var editTextarea = document.getElementById("editTextarea");
+        var editPanel = document.getElementById("editPanel");
         var isEditMode = false;
+        var placedSounds = [];
+        var selectedSoundIndex = -1;
         var universalCamera = null;
         var arcRotateCamera = null;
         var hemiLight = null;
@@ -87,6 +260,7 @@
         // You must at least define a camera
         var createScene = function () {
             var scene = new BABYLON.Scene(engine);
+            initAudio(scene);
             scene.useRightHandedSystem = true;
             scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
             engine.displayLoadingUI();
@@ -121,6 +295,7 @@
 
             // Set initial camera to universal
             scene.activeCamera = universalCamera;
+            startSoundCollisions(universalCamera);
 
             BABYLON.SceneLoader.ImportMesh("", "./", "krimson_city_sewers.glb", scene, function (newMeshes) {
                 console.log("loaded textures/models");
@@ -244,6 +419,22 @@
             textInfo.height = "30px";
             stackPanel.addControl(textInfo);
 
+            // ================================================================
+            // ADD YOUR SOUNDS HERE
+            // ----------------------------------------------------------------
+            // Use edit mode (Ctrl+E) to find positions — press SPACE to place
+            // a sound marker, then copy the generated code below.
+            //
+            // AreaSound      — looping spatial audio (volume fades with distance)
+            // new AreaSound({ file: './assets/ambient.wav', x: 0, y: 0, z: 0, rolloff: 5 });
+            //
+            // OneShotCollisionSound — plays once when the player walks into the zone
+            // new OneShotCollisionSound({ file: './assets/trigger.wav', x: 0, y: 0, z: 0, w: 3 });
+            // ================================================================
+let areaSounds = [];
+areaSounds.push(new AreaSound({ file: "./audio/toneC3.ogg", x: -73, y: -10.45, z: -77.76, volume: 0.5, rolloff: 5, visible: false }));
+let triggerSounds = [];
+triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -89.85, y: -10.57, z: -24.51, volume: 0.5, w: 2.5, timeBetweenPlays: 2000, visible: false }));
             return scene;
         };
 
@@ -263,6 +454,9 @@
 
             engine = await asyncEngineCreation();
             if (!engine) throw 'engine should not be null.';
+            if (BABYLON.AbstractEngine && BABYLON.AbstractEngine.AudioEngineFactory && !BABYLON.AbstractEngine.audioEngine) {
+                BABYLON.AbstractEngine.audioEngine = BABYLON.AbstractEngine.AudioEngineFactory(canvas);
+            }
             scene = createScene();
         };
         initFunction().then(() => {
@@ -278,6 +472,11 @@
                 var forward = arcRotateCamera.target.subtract(arcRotateCamera.position).normalize();
                 arcRotateCamera.target.addInPlace(forward.scale(amount));
             };
+            var moveEditCameraRight = function (amount) {
+                var forward = arcRotateCamera.target.subtract(arcRotateCamera.position).normalize();
+                var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up()).normalize();
+                arcRotateCamera.target.addInPlace(right.scale(amount));
+            };
             var wheelListener = function (e) {
                 e.preventDefault();
                 moveEditCameraForward(-e.deltaY * 0.05);
@@ -286,12 +485,18 @@
             var editMouseButton = -1;
             var editLastX = 0;
             var editLastY = 0;
+            var editDownX = 0;
+            var editDownY = 0;
+            var editPointerOnCanvas = false;
             canvas.addEventListener('contextmenu', function (e) { if (isEditMode) e.preventDefault(); });
             canvas.addEventListener('pointerdown', function (e) {
                 if (!isEditMode) return;
+                editPointerOnCanvas = true;
                 editMouseButton = e.button;
                 editLastX = e.clientX;
                 editLastY = e.clientY;
+                editDownX = e.clientX;
+                editDownY = e.clientY;
             });
             window.addEventListener('pointermove', function (e) {
                 if (!isEditMode || editMouseButton === -1) return;
@@ -302,7 +507,7 @@
                 if (editMouseButton === 0) {
                     // Left-drag: orbit around current camera position
                     var camPos = arcRotateCamera.position.clone();
-                    arcRotateCamera.alpha -= dx * 0.005;
+                    arcRotateCamera.alpha += dx * 0.005;
                     arcRotateCamera.beta = Math.max(0.01, Math.min(Math.PI - 0.01, arcRotateCamera.beta - dy * 0.005));
                     // Recompute target so camera stays pinned at camPos
                     var sB = Math.sin(arcRotateCamera.beta), cB = Math.cos(arcRotateCamera.beta);
@@ -322,7 +527,21 @@
                 }
             });
             window.addEventListener('pointerup', function (e) {
+                if (isEditMode && e.button === 0 && editPointerOnCanvas) {
+                    var dx = e.clientX - editDownX;
+                    var dy = e.clientY - editDownY;
+                    if (Math.sqrt(dx * dx + dy * dy) < 5) {
+                        var pickResult = scene.pick(e.clientX, e.clientY);
+                        if (pickResult.hit && pickResult.pickedMesh) {
+                            var idx = placedSounds.findIndex(function (s) { return s.ghostMesh === pickResult.pickedMesh; });
+                            selectSound(idx !== -1 ? idx : -1);
+                        } else {
+                            selectSound(-1);
+                        }
+                    }
+                }
                 if (e.button === editMouseButton) editMouseButton = -1;
+                editPointerOnCanvas = false;
             });
 
             var lastPinchDistance = null;
@@ -374,9 +593,44 @@
                         // Change to world light
                         torch.intensity = 0;
                         hemiLight.intensity = 2.0;
-                        editTextarea.style.display = 'block';
+                        editPanel.style.display = 'flex';
+                        // Import any externally registered sounds not yet tracked
+                        (window._registeredSounds || []).forEach(function(rs) {
+                            if (placedSounds.some(function(ps) { return ps._source === rs; })) return;
+                            var isArea = rs instanceof AreaSound;
+                            var mesh = isArea ? rs.sphere : rs.box;
+                            var pos = mesh ? mesh.position : rs.position;
+                            var index = placedSounds.length;
+                            var config = {
+                                _source: rs,
+                                type: isArea ? 'AreaSound' : 'OneShotCollisionSound',
+                                file: isArea
+                                    ? rs.sound.name
+                                    : (rs.sounds.length ? rs.sounds.map(function(s) { return s.name; }).join(', ') : rs.sound.name),
+                                x: parseFloat(pos.x.toFixed(2)),
+                                y: parseFloat(pos.y.toFixed(2)),
+                                z: parseFloat(pos.z.toFixed(2)),
+                                volume: rs.volume,
+                                rolloff: isArea ? rs.rolloff : undefined,
+                                w: !isArea ? rs.w : undefined,
+                                timeBetweenPlays: !isArea ? rs.timeBetweenPlays : undefined
+                            };
+                            var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
+                            ghostMat.wireframe = true;
+                            ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
+                            config.ghostMesh = isArea
+                                ? BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene)
+                                : BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
+                            config.ghostMesh.material = ghostMat;
+                            config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
+                            updateGhostMesh(config);
+                            placedSounds.push(config);
+                        });
+                        updateSoundList();
+                        generateCode();
+                        placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.isVisible = true; });
                         // Add wheel and pinch listeners
-                        editTextarea.addEventListener('wheel', wheelListener, { passive: false });
+                        canvas.addEventListener('wheel', wheelListener, { passive: false });
                         window.addEventListener('touchstart', touchStartListener, { passive: true });
                         window.addEventListener('touchmove', touchMoveListener, { passive: false });
                         window.addEventListener('touchend', touchEndListener, { passive: true });
@@ -386,9 +640,10 @@
                         // Change back to torch light
                         torch.intensity = 1000;
                         hemiLight.intensity = 0.02;
-                        editTextarea.style.display = 'none';
+                        editPanel.style.display = 'none';
+                        placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.isVisible = false; });
                         // Remove wheel and pinch listeners
-                        editTextarea.removeEventListener('wheel', wheelListener);
+                        canvas.removeEventListener('wheel', wheelListener);
                         window.removeEventListener('touchstart', touchStartListener);
                         window.removeEventListener('touchmove', touchMoveListener);
                         window.removeEventListener('touchend', touchEndListener);
@@ -396,19 +651,19 @@
                     }
                 }
 
-                // Arrow keys to move forward/back in edit mode
-                if (isEditMode && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                // Arrow keys and WASD to move in edit mode
+                if (isEditMode && ['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', 'a', 'A', 'd', 'D'].includes(event.key)) {
                     event.preventDefault();
-                    moveEditCameraForward(event.key === 'ArrowUp' ? 1 : -1);
+                    if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') moveEditCameraForward(1);
+                    if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') moveEditCameraForward(-1);
+                    if (event.key === 'a' || event.key === 'A') moveEditCameraRight(-1);
+                    if (event.key === 'd' || event.key === 'D') moveEditCameraRight(1);
                 }
 
-                // Spacebar to add coordinates in edit mode
+                // Spacebar to place a sound in edit mode
                 if (isEditMode && event.key === ' ') {
                     event.preventDefault();
-                    var pos = scene.activeCamera.position;
-                    var coord = pos.x.toFixed(2) + ', ' + pos.y.toFixed(2) + ', ' + pos.z.toFixed(2);
-                    editTextarea.value += coord + '\n';
-                    editTextarea.scrollTop = editTextarea.scrollHeight;
+                    placeSoundAtCamera();
                 }
             });
         });
@@ -416,6 +671,309 @@
         // Resize
         window.addEventListener("resize", function () {
             engine.resize();
+        });
+
+        // --- Sound Editor Panel ---
+
+        // Slider value displays — also live-update selected sound
+        document.getElementById('soundVolume').addEventListener('input', function() {
+            document.getElementById('volumeVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].volume = parseFloat(this.value); generateCode(); }
+        });
+        document.getElementById('soundRolloff').addEventListener('input', function() {
+            document.getElementById('rolloffVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                var s = placedSounds[selectedSoundIndex];
+                s.rolloff = parseFloat(this.value);
+                updateGhostMesh(s);
+                generateCode();
+            }
+        });
+        document.getElementById('soundWidth').addEventListener('input', function() {
+            document.getElementById('widthVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                var s = placedSounds[selectedSoundIndex];
+                s.w = parseFloat(this.value);
+                updateGhostMesh(s);
+                generateCode();
+            }
+        });
+        document.getElementById('soundCooldown').addEventListener('input', function() {
+            document.getElementById('cooldownVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].timeBetweenPlays = parseInt(this.value); generateCode(); }
+        });
+        document.getElementById('soundFile').addEventListener('input', function() {
+            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].file = this.value.trim(); updateSoundList(); generateCode(); }
+        });
+
+        function makeScrubLabel(labelEl, inputEl) {
+            var scrubbing = false;
+            var startX = 0;
+            var startVal = 0;
+            labelEl.addEventListener('pointerdown', function(e) {
+                if (e.target === inputEl) return;
+                scrubbing = true;
+                startX = e.clientX;
+                startVal = parseFloat(inputEl.value) || 0;
+                labelEl.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+            labelEl.addEventListener('pointermove', function(e) {
+                if (!scrubbing) return;
+                inputEl.value = parseFloat((startVal + (e.clientX - startX) * 0.1).toFixed(2));
+                inputEl.dispatchEvent(new Event('input'));
+            });
+            labelEl.addEventListener('pointerup', function() { scrubbing = false; });
+            labelEl.addEventListener('pointercancel', function() { scrubbing = false; });
+        }
+
+        ['posX', 'posY', 'posZ'].forEach(function(id) {
+            makeScrubLabel(document.getElementById(id).parentElement, document.getElementById(id));
+        });
+
+        ['posX', 'posY', 'posZ'].forEach(function(id) {
+            document.getElementById(id).addEventListener('input', function() {
+                if (selectedSoundIndex === -1) return;
+                var s = placedSounds[selectedSoundIndex];
+                var axis = id.slice(-1).toLowerCase(); // 'x', 'y', or 'z'
+                s[axis] = parseFloat(this.value) || 0;
+                if (s.ghostMesh) s.ghostMesh.position[axis] = s[axis];
+                updateSoundList();
+                generateCode();
+            });
+        });
+
+        // Toggle area/oneshot options
+        document.querySelectorAll('input[name="soundType"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var isArea = this.value === 'AreaSound';
+                document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
+                document.getElementById('oneShotOptions').style.display = isArea ? 'none' : 'block';
+            });
+        });
+
+        function placeSoundAtCamera() {
+            var pos = scene.activeCamera.position;
+            var type = document.querySelector('input[name="soundType"]:checked').value;
+            var file = document.getElementById('soundFile').value.trim() || './assets/sound.wav';
+            var volume = parseFloat(document.getElementById('soundVolume').value);
+            var index = placedSounds.length;
+
+            var config = {
+                type: type,
+                file: file,
+                x: parseFloat(pos.x.toFixed(2)),
+                y: parseFloat(pos.y.toFixed(2)),
+                z: parseFloat(pos.z.toFixed(2)),
+                volume: volume
+            };
+
+            var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
+            ghostMat.wireframe = true;
+
+            if (type === 'AreaSound') {
+                config.rolloff = parseFloat(document.getElementById('soundRolloff').value);
+                // Unit sphere — scaled via updateGhostMesh
+                config.ghostMesh = BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene);
+                ghostMat.emissiveColor = new BABYLON.Color3(0, 0.8, 0.8);
+            } else {
+                config.w = parseFloat(document.getElementById('soundWidth').value);
+                config.timeBetweenPlays = parseInt(document.getElementById('soundCooldown').value);
+                // Unit box — scaled via updateGhostMesh
+                config.ghostMesh = BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
+                ghostMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0);
+            }
+
+            config.ghostMesh.material = ghostMat;
+            config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
+            updateGhostMesh(config);
+
+            placedSounds.push(config);
+            updateSoundList();
+            generateCode();
+        }
+
+        function updateGhostMesh(s) {
+            if (!s.ghostMesh) return;
+            if (s.type === 'AreaSound') {
+                var d = (8 / s.rolloff) * 3;
+                s.ghostMesh.scaling.setAll(d);
+            } else {
+                s.ghostMesh.scaling.setAll(s.w);
+            }
+        }
+
+
+function selectSound(i) {
+            // Restore previous selection mesh appearance
+            if (selectedSoundIndex !== -1 && placedSounds[selectedSoundIndex]) {
+                var prev = placedSounds[selectedSoundIndex];
+                if (prev.ghostMesh) {
+                    prev.ghostMesh.material.wireframe = true;
+                    prev.ghostMesh.material.alpha = 1;
+                    prev.ghostMesh.material.emissiveColor = prev.type === 'AreaSound'
+                        ? new BABYLON.Color3(0, 0.8, 0.8)
+                        : new BABYLON.Color3(1, 0.8, 0);
+                }
+            }
+
+            selectedSoundIndex = i;
+            var bar = document.getElementById('editingBar');
+            var posControls = document.getElementById('positionControls');
+
+            if (i === -1) {
+                bar.style.display = 'none';
+                posControls.style.display = 'none';
+                return;
+            }
+
+            var s = placedSounds[i];
+
+            // Highlight: wireframe yellow
+            if (s.ghostMesh) {
+                s.ghostMesh.material.wireframe = true;
+                s.ghostMesh.material.alpha = 1;
+                s.ghostMesh.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
+            }
+
+            // Teleport camera to look at the sound
+            arcRotateCamera.target = new BABYLON.Vector3(s.x, s.y, s.z);
+
+            // Populate controls
+            document.querySelector('input[name="soundType"][value="' + s.type + '"]').checked = true;
+            document.getElementById('soundFile').value = s.file;
+            document.getElementById('soundVolume').value = s.volume;
+            document.getElementById('volumeVal').textContent = s.volume;
+
+            var isArea = s.type === 'AreaSound';
+            document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
+            document.getElementById('oneShotOptions').style.display = isArea ? 'none' : 'block';
+
+            if (isArea) {
+                document.getElementById('soundRolloff').value = s.rolloff;
+                document.getElementById('rolloffVal').textContent = s.rolloff;
+            } else {
+                document.getElementById('soundWidth').value = s.w;
+                document.getElementById('widthVal').textContent = s.w;
+                document.getElementById('soundCooldown').value = s.timeBetweenPlays;
+                document.getElementById('cooldownVal').textContent = s.timeBetweenPlays;
+            }
+
+            // Position controls
+            posControls.style.display = 'block';
+            document.getElementById('posX').value = s.x;
+            document.getElementById('posY').value = s.y;
+            document.getElementById('posZ').value = s.z;
+
+            bar.style.display = 'flex';
+            bar.innerHTML = '<span>Editing: ' + (isArea ? 'AreaSound' : 'OneShotCollision') + ' #' + (i + 1) + '</span>' +
+                '<button id="deselectBtn">✕ deselect</button>';
+            document.getElementById('deselectBtn').addEventListener('click', function() { selectSound(-1); });
+
+            updateSoundList();
+        }
+
+        function updateSoundList() {
+            var list = document.getElementById('soundList');
+            document.getElementById('soundCount').textContent = placedSounds.length;
+            list.innerHTML = '';
+            placedSounds.forEach(function(s, i) {
+                var item = document.createElement('div');
+                item.className = 'sound-item' + (i === selectedSoundIndex ? ' selected' : '');
+                var isArea = s.type === 'AreaSound';
+                var fileName = s.file.split('/').pop().split(',')[0];
+                item.innerHTML =
+                    '<span class="si-badge ' + (isArea ? 'area' : 'oneshot') + '">' +
+                        (isArea ? 'AREA' : 'SHOT') +
+                    '</span>' +
+                    '<span class="si-info" title="' + s.file + '">' +
+                        fileName + ' (' + s.x + ', ' + s.y + ', ' + s.z + ')' +
+                    '</span>' +
+                    '<button class="si-del" data-index="' + i + '">×</button>';
+                item.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('si-del')) return;
+                    selectSound(i === selectedSoundIndex ? -1 : i);
+                });
+                list.appendChild(item);
+            });
+            list.querySelectorAll('.si-del').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var i = parseInt(this.getAttribute('data-index'));
+                    if (i === selectedSoundIndex) selectSound(-1);
+                    if (placedSounds[i].ghostMesh) placedSounds[i].ghostMesh.dispose();
+                    placedSounds.splice(i, 1);
+                    updateSoundList();
+                    generateCode();
+                });
+            });
+        }
+
+        function generateCode() {
+            var areaSounds = placedSounds.filter(function(s) { return s.type === 'AreaSound'; });
+            var oneShotSounds = placedSounds.filter(function(s) { return s.type === 'OneShotCollisionSound'; });
+            var lines = [];
+
+            if (areaSounds.length > 0) {
+                lines.push('let areaSounds = [];');
+                areaSounds.forEach(function(s) {
+                    var files = s.file.split(',').map(function(f) { return '"' + f.trim() + '"'; });
+                    var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
+                    lines.push('areaSounds.push(new AreaSound({ file: ' + fileStr +
+                        ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
+                        ', volume: ' + s.volume + ', rolloff: ' + s.rolloff +
+                        ', visible: false }));');
+                });
+            }
+
+            if (oneShotSounds.length > 0) {
+                lines.push('let triggerSounds = [];');
+                oneShotSounds.forEach(function(s) {
+                    var files = s.file.split(',').map(function(f) { return '"' + f.trim() + '"'; });
+                    var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
+                    lines.push('triggerSounds.push(new OneShotCollisionSound({ file: ' + fileStr +
+                        ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
+                        ', volume: ' + s.volume + ', w: ' + s.w +
+                        ', timeBetweenPlays: ' + s.timeBetweenPlays +
+                        ', visible: false }));');
+                });
+            }
+
+            document.getElementById('codeOutput').value = lines.join('\n');
+        }
+
+        document.getElementById('codeOutput').addEventListener('click', function() {
+            if (!this.value) return;
+            this.focus();
+            this.select();
+        });
+
+        document.getElementById('copyCodeBtn').addEventListener('click', function() {
+            var btn = this;
+            var ta = document.getElementById('codeOutput');
+            if (!ta.value) return;
+            function onSuccess() {
+                btn.textContent = 'Copied!';
+                setTimeout(function() { btn.textContent = 'Copy Code'; }, 1500);
+            }
+            function execFallback() {
+                ta.focus();
+                ta.select();
+                document.execCommand('copy');
+                onSuccess();
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(ta.value).then(onSuccess, execFallback);
+            } else {
+                execFallback();
+            }
+        });
+
+        document.getElementById('clearAllBtn').addEventListener('click', function() {
+            placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.dispose(); });
+            placedSounds = [];
+            updateSoundList();
+            generateCode();
         });
     </script>
 </body>
