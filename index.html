@@ -3,6 +3,7 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 
     <title>Babylon.js sample code</title>
     <!-- Babylon.js -->
@@ -38,6 +39,7 @@
         }
 
         #editTextarea {
+            touch-action: none;
             position: absolute;
             bottom: 10px;
             right: 10px;
@@ -114,14 +116,8 @@
             universalCamera.angularSensibilityZ = 2000;
 
             // Create ArcRotateCamera for edit mode
-            arcRotateCamera = new BABYLON.ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, 50, new BABYLON.Vector3(-73, -12, -73), scene);
-            arcRotateCamera.attachControl(canvas, true);
-            arcRotateCamera.wheelPrecisionX = 0.1;
-            arcRotateCamera.wheelPrecisionY = 0.1;
-            arcRotateCamera.wheelPrecisionZ = 0.1;
-            arcRotateCamera.lowerRadiusLimit = 0.1;
-            arcRotateCamera.upperRadiusLimit = 1000;
-            arcRotateCamera.panningSensibility = 50; // Make panning more sensitive
+            arcRotateCamera = new BABYLON.ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, 5, new BABYLON.Vector3(-73, -12, -73), scene);
+            arcRotateCamera.inputs.clear(); // handle all input manually
 
             // Set initial camera to universal
             scene.activeCamera = universalCamera;
@@ -278,10 +274,82 @@
             });
 
             // Add key event listeners for edit mode
+            var moveEditCameraForward = function (amount) {
+                var forward = arcRotateCamera.target.subtract(arcRotateCamera.position).normalize();
+                arcRotateCamera.target.addInPlace(forward.scale(amount));
+            };
             var wheelListener = function (e) {
                 e.preventDefault();
-                arcRotateCamera.radius += e.deltaY * 0.01;
-                arcRotateCamera.radius = Math.max(0.1, Math.min(1000, arcRotateCamera.radius));
+                moveEditCameraForward(-e.deltaY * 0.05);
+            };
+            // Manual mouse orbit/pan for edit mode
+            var editMouseButton = -1;
+            var editLastX = 0;
+            var editLastY = 0;
+            canvas.addEventListener('contextmenu', function (e) { if (isEditMode) e.preventDefault(); });
+            canvas.addEventListener('pointerdown', function (e) {
+                if (!isEditMode) return;
+                editMouseButton = e.button;
+                editLastX = e.clientX;
+                editLastY = e.clientY;
+            });
+            window.addEventListener('pointermove', function (e) {
+                if (!isEditMode || editMouseButton === -1) return;
+                var dx = e.clientX - editLastX;
+                var dy = e.clientY - editLastY;
+                editLastX = e.clientX;
+                editLastY = e.clientY;
+                if (editMouseButton === 0) {
+                    // Left-drag: orbit around current camera position
+                    var camPos = arcRotateCamera.position.clone();
+                    arcRotateCamera.alpha -= dx * 0.005;
+                    arcRotateCamera.beta = Math.max(0.01, Math.min(Math.PI - 0.01, arcRotateCamera.beta - dy * 0.005));
+                    // Recompute target so camera stays pinned at camPos
+                    var sB = Math.sin(arcRotateCamera.beta), cB = Math.cos(arcRotateCamera.beta);
+                    var cA = Math.cos(arcRotateCamera.alpha), sA = Math.sin(arcRotateCamera.alpha);
+                    arcRotateCamera.target.set(
+                        camPos.x - arcRotateCamera.radius * sB * cA,
+                        camPos.y - arcRotateCamera.radius * cB,
+                        camPos.z - arcRotateCamera.radius * sB * sA
+                    );
+                } else if (editMouseButton === 2) {
+                    // Right-drag: pan
+                    var forward = arcRotateCamera.target.subtract(arcRotateCamera.position).normalize();
+                    var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up()).normalize();
+                    var up = BABYLON.Vector3.Cross(right, forward).normalize();
+                    arcRotateCamera.target.addInPlace(right.scale(-dx * 0.05));
+                    arcRotateCamera.target.addInPlace(up.scale(dy * 0.05));
+                }
+            });
+            window.addEventListener('pointerup', function (e) {
+                if (e.button === editMouseButton) editMouseButton = -1;
+            });
+
+            var lastPinchDistance = null;
+            var touchStartListener = function (e) {
+                if (e.touches.length === 2) {
+                    var dx = e.touches[0].clientX - e.touches[1].clientX;
+                    var dy = e.touches[0].clientY - e.touches[1].clientY;
+                    lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
+                } else {
+                    lastPinchDistance = null;
+                }
+            };
+            var touchMoveListener = function (e) {
+                if (e.touches.length === 2 && lastPinchDistance !== null) {
+                    e.preventDefault();
+                    var dx = e.touches[0].clientX - e.touches[1].clientX;
+                    var dy = e.touches[0].clientY - e.touches[1].clientY;
+                    var distance = Math.sqrt(dx * dx + dy * dy);
+                    var delta = lastPinchDistance - distance;
+                    moveEditCameraForward(-delta * 0.5);
+                    lastPinchDistance = distance;
+                }
+            };
+            var touchEndListener = function (e) {
+                if (e.touches.length < 2) {
+                    lastPinchDistance = null;
+                }
             };
             window.addEventListener('keydown', function (event) {
                 // Ctrl+E to toggle edit mode
@@ -292,19 +360,26 @@
                         // Switch to ArcRotateCamera
                         var currentPos = scene.activeCamera.position;
                         var currentTarget = scene.activeCamera.getTarget ? scene.activeCamera.getTarget() : new BABYLON.Vector3(-73, -12, -73);
-                        arcRotateCamera.setTarget(currentTarget);
-                        arcRotateCamera.radius = 100; // Zoom out further
-                        // Set alpha and beta to match current view direction
-                        var direction = currentPos.subtract(currentTarget).normalize();
-                        arcRotateCamera.alpha = Math.atan2(direction.x, direction.z);
-                        arcRotateCamera.beta = Math.acos(direction.y);
+                        // Small radius so orbit pivot is just in front of the camera
+                        var radius = 5;
+                        arcRotateCamera.radius = radius;
+                        // alpha/beta describe the vector FROM target TO camera, so use the back direction
+                        var lookDir = currentTarget.subtract(currentPos).normalize();
+                        var backDir = lookDir.negate();
+                        arcRotateCamera.alpha = Math.atan2(backDir.z, backDir.x);
+                        arcRotateCamera.beta = Math.acos(Math.max(-1, Math.min(1, backDir.y)));
+                        // Place target in front of camera so camera lands at currentPos
+                        arcRotateCamera.target = currentPos.add(lookDir.scale(radius));
                         scene.activeCamera = arcRotateCamera;
                         // Change to world light
                         torch.intensity = 0;
                         hemiLight.intensity = 2.0;
                         editTextarea.style.display = 'block';
-                        // Add wheel listener to textarea
+                        // Add wheel and pinch listeners
                         editTextarea.addEventListener('wheel', wheelListener, { passive: false });
+                        window.addEventListener('touchstart', touchStartListener, { passive: true });
+                        window.addEventListener('touchmove', touchMoveListener, { passive: false });
+                        window.addEventListener('touchend', touchEndListener, { passive: true });
                     } else {
                         // Switch back to UniversalCamera
                         scene.activeCamera = universalCamera;
@@ -312,9 +387,19 @@
                         torch.intensity = 1000;
                         hemiLight.intensity = 0.02;
                         editTextarea.style.display = 'none';
-                        // Remove wheel listener
+                        // Remove wheel and pinch listeners
                         editTextarea.removeEventListener('wheel', wheelListener);
+                        window.removeEventListener('touchstart', touchStartListener);
+                        window.removeEventListener('touchmove', touchMoveListener);
+                        window.removeEventListener('touchend', touchEndListener);
+                        lastPinchDistance = null;
                     }
+                }
+
+                // Arrow keys to move forward/back in edit mode
+                if (isEditMode && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                    event.preventDefault();
+                    moveEditCameraForward(event.key === 'ArrowUp' ? 1 : -1);
                 }
 
                 // Spacebar to add coordinates in edit mode
