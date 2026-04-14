@@ -431,6 +431,9 @@
             universalCamera.speed = 0.1;
             universalCamera.angularSensibilityX = 20;
             universalCamera.angularSensibilityZ = 2000;
+            universalCamera.checkCollisions = true;
+            universalCamera.ellipsoid = new BABYLON.Vector3(0.5, 0.3, 0.5);
+            universalCamera.ellipsoidOffset = new BABYLON.Vector3(0, -0.6, 0);
 
             // Create ArcRotateCamera for edit mode
             arcRotateCamera = new BABYLON.ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, 5, new BABYLON.Vector3(-73, -12, -73), scene);
@@ -487,8 +490,6 @@
 
             var playerHeight = 1.8;
             var rayLength = 1000;
-            var collisionDistance = 1.0;
-            var stepHeight = 1.2;
 
             scene.registerBeforeRender(function () {
                 // Update torch position and direction to follow camera
@@ -496,39 +497,13 @@
                 torch.direction = scene.activeCamera.getForwardRay().direction;
 
                 if (!isEditMode) {
+                    // Single downward raycast for floor height — handles steps up and down
                     var pickPredicate = function (mesh) { return mesh.isPickable; };
-
-                    // Downward raycast for floor — snaps camera to ground + playerHeight
                     var downRay = new BABYLON.Ray(universalCamera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
                     var downHit = scene.pickWithRay(downRay, pickPredicate);
                     if (downHit.pickedMesh) {
                         var targetY = downHit.pickedPoint.y + playerHeight;
-                        universalCamera.position.y += (targetY - universalCamera.position.y) * 0.2;
-                    }
-
-                    // Horizontal wall collisions — cast from chest height to ignore steps
-                    var castOrigin = universalCamera.position.clone();
-                    castOrigin.y -= (playerHeight - stepHeight);
-
-                    var forward = universalCamera.getDirection(BABYLON.Vector3.Forward());
-                    forward.y = 0;
-                    forward.normalize();
-                    var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up()).normalize();
-                    var backward = forward.scale(-1);
-                    var left = right.scale(-1);
-
-                    var directions = [
-                        { dir: forward, push: backward },
-                        { dir: backward, push: forward },
-                        { dir: right, push: left },
-                        { dir: left, push: right }
-                    ];
-                    for (var i = 0; i < directions.length; i++) {
-                        var ray = new BABYLON.Ray(castOrigin, directions[i].dir, collisionDistance);
-                        var hit = scene.pickWithRay(ray, pickPredicate);
-                        if (hit.pickedMesh && hit.distance < collisionDistance) {
-                            universalCamera.position.addInPlace(directions[i].push.scale(collisionDistance - hit.distance));
-                        }
+                        universalCamera.position.y += (targetY - universalCamera.position.y) * 0.15;
                     }
                 }
 
