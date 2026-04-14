@@ -21,8 +21,9 @@
     <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
     <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
     <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
-    <script src="audioClasses.js"></script> 
-    
+    <script src="audioClasses.js"></script>
+    <script src="sounds.js"></script>
+
     <style>
         html,
         body {
@@ -47,7 +48,7 @@
             width: 280px;
             max-height: calc(100vh - 20px);
             overflow-y: auto;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0, 0, 0, 0.9);
             color: #e0e0e0;
             font-family: monospace;
             font-size: 12px;
@@ -57,6 +58,7 @@
             z-index: 1000;
             box-sizing: border-box;
         }
+
         #editPanel .ep-header {
             padding: 8px 10px;
             background: #111;
@@ -68,8 +70,18 @@
             display: flex;
             justify-content: space-between;
         }
-        #editPanel .ep-hint { color: #555; font-size: 10px; font-weight: normal; }
-        #editPanel .ep-section { padding: 8px 10px; border-bottom: 1px solid #1e1e1e; }
+
+        #editPanel .ep-hint {
+            color: #555;
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        #editPanel .ep-section {
+            padding: 8px 10px;
+            border-bottom: 1px solid #1e1e1e;
+        }
+
         #editPanel .ep-label {
             display: block;
             margin-bottom: 4px;
@@ -78,7 +90,40 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        #editPanel .ep-toggle label { margin-right: 12px; cursor: pointer; color: #ccc; }
+
+        #editPanel .ep-toggle label {
+            margin-right: 12px;
+            cursor: pointer;
+            color: #ccc;
+        }
+
+        #editPanel .ep-file-row {
+            display: flex;
+            gap: 4px;
+        }
+
+        #editPanel .ep-file-row input[type="text"] {
+            flex: 1;
+            min-width: 0;
+        }
+
+        #editPanel #browseFileBtn {
+            flex-shrink: 0;
+            padding: 4px 7px;
+            background: #111;
+            border: 1px solid #444;
+            color: #ccc;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        #editPanel #browseFileBtn:hover {
+            background: #222;
+            border-color: #888;
+        }
+
         #editPanel input[type="text"] {
             width: 100%;
             background: #111;
@@ -89,9 +134,24 @@
             padding: 4px 6px;
             box-sizing: border-box;
         }
-        #editPanel input[type="range"] { width: 100%; cursor: pointer; margin-top: 2px; }
-        #editPanel .ep-row { display: flex; justify-content: space-between; align-items: center; }
-        #editPanel #soundList { max-height: 130px; overflow-y: auto; }
+
+        #editPanel input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            margin-top: 2px;
+        }
+
+        #editPanel .ep-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #editPanel #soundList {
+            max-height: 130px;
+            overflow-y: auto;
+        }
+
         #editPanel .sound-item {
             display: flex;
             align-items: center;
@@ -101,11 +161,38 @@
             font-size: 11px;
             gap: 4px;
         }
-        #editPanel .sound-item:hover { background: #111; }
-        #editPanel .sound-item.selected { color: #ff44ff; background: #1a0022; border-left: 2px solid #cc00cc; }
-        #editPanel .ep-xyz { display: flex; gap: 4px; margin-top: 4px; }
-        #editPanel .ep-xyz label { flex: 1; color: #888; font-size: 10px; display: flex; flex-direction: column; gap: 2px; cursor: ew-resize; user-select: none; }
-        #editPanel .ep-xyz input[type="number"] { cursor: text; }
+
+        #editPanel .sound-item:hover {
+            background: #111;
+        }
+
+        #editPanel .sound-item.selected {
+            color: #ff44ff;
+            background: #1a0022;
+            border-left: 2px solid #cc00cc;
+        }
+
+        #editPanel .ep-xyz {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        #editPanel .ep-xyz label {
+            flex: 1;
+            color: #888;
+            font-size: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            cursor: ew-resize;
+            user-select: none;
+        }
+
+        #editPanel .ep-xyz input[type="number"] {
+            cursor: text;
+        }
+
         #editPanel .ep-xyz input[type="number"] {
             width: 100%;
             background: #111;
@@ -116,15 +203,31 @@
             padding: 3px 4px;
             box-sizing: border-box;
         }
+
         #editPanel .si-badge {
             font-size: 9px;
             padding: 1px 3px;
             border-radius: 2px;
             flex-shrink: 0;
         }
-        #editPanel .si-badge.area { background: #003333; color: #00cccc; }
-        #editPanel .si-badge.oneshot { background: #332200; color: #ffaa00; }
-        #editPanel .si-info { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        #editPanel .si-badge.area {
+            background: #003333;
+            color: #00cccc;
+        }
+
+        #editPanel .si-badge.oneshot {
+            background: #332200;
+            color: #ffaa00;
+        }
+
+        #editPanel .si-info {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         #editPanel .si-del {
             background: none;
             border: none;
@@ -134,8 +237,18 @@
             padding: 0 2px;
             line-height: 1;
         }
-        #editPanel .si-del:hover { color: #ff4444; }
-        #editPanel .ep-actions { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #1e1e1e; }
+
+        #editPanel .si-del:hover {
+            color: #ff4444;
+        }
+
+        #editPanel .ep-actions {
+            display: flex;
+            gap: 6px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #1e1e1e;
+        }
+
         #editPanel .ep-actions button {
             flex: 1;
             padding: 5px;
@@ -146,7 +259,12 @@
             font-family: monospace;
             font-size: 11px;
         }
-        #editPanel .ep-actions button:hover { background: #222; border-color: #888; }
+
+        #editPanel .ep-actions button:hover {
+            background: #222;
+            border-color: #888;
+        }
+
         #editingBar {
             padding: 5px 10px;
             background: #002222;
@@ -157,6 +275,7 @@
             justify-content: space-between;
             align-items: center;
         }
+
         #editingBar button {
             background: none;
             border: none;
@@ -165,7 +284,11 @@
             font-size: 11px;
             padding: 0;
         }
-        #editingBar button:hover { color: #aaa; }
+
+        #editingBar button:hover {
+            color: #aaa;
+        }
+
         #editPanel #codeOutput {
             width: 100%;
             height: 90px;
@@ -186,6 +309,9 @@
     <canvas id="renderCanvas"></canvas>
     <div id="editPanel">
         <div class="ep-header">SOUND EDITOR <span class="ep-hint">Ctrl+E to exit</span></div>
+        <div id="autoSaveBar"
+            style="padding:3px 10px;background:#001a00;border-bottom:1px solid #1e1e1e;color:#448844;font-size:9px;display:none;">
+        </div>
         <div id="editingBar" style="display:none"></div>
         <div class="ep-section">
             <span class="ep-label">Type</span>
@@ -196,20 +322,28 @@
         </div>
         <div class="ep-section">
             <span class="ep-label">File <span class="ep-hint">(comma-separate for multiple)</span></span>
-            <input type="text" id="soundFile" placeholder="./assets/ambient.wav">
+            <div class="ep-file-row">
+                <input type="text" id="soundFile" placeholder="./audio/ambient.wav">
+                <button id="browseFileBtn">Browse…</button>
+            </div>
+            <input type="file" id="soundFilePicker" accept="audio/*" style="display:none">
         </div>
         <div class="ep-section">
             <div class="ep-row"><span class="ep-label">Volume</span><span id="volumeVal">0.5</span></div>
             <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5">
         </div>
         <div id="areaOptions" class="ep-section">
-            <div class="ep-row"><span class="ep-label">Rolloff</span><span id="rolloffVal">5</span></div>
-            <input type="range" id="soundRolloff" min="1" max="20" step="0.5" value="5">
+            <div class="ep-row"><span class="ep-label">Rolloff</span><span id="rolloffVal">1</span></div>
+            <input type="range" id="soundRolloff" min="0.1" max="10" step="0.1" value="1">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Min Distance</span><span
+                    id="minDistVal">1</span></div>
+            <input type="range" id="soundMinDist" min="0" max="20" step="0.5" value="1">
         </div>
         <div id="oneShotOptions" class="ep-section" style="display:none">
             <div class="ep-row"><span class="ep-label">Width</span><span id="widthVal">3</span></div>
             <input type="range" id="soundWidth" min="0.5" max="20" step="0.5" value="3">
-            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Cooldown (ms)</span><span id="cooldownVal">2000</span></div>
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Cooldown (ms)</span><span
+                    id="cooldownVal">2000</span></div>
             <input type="range" id="soundCooldown" min="500" max="10000" step="500" value="2000">
         </div>
         <div id="positionControls" class="ep-section" style="display:none">
@@ -220,16 +354,23 @@
                 <label>Z<input type="number" id="posZ" step="0.1"></label>
             </div>
         </div>
-        <div class="ep-section ep-hint" style="text-align:center;padding:6px 10px">Press SPACE to place at camera position</div>
+        <div class="ep-section" style="text-align:center;padding:6px 10px">
+            <button id="placeSoundBtn"
+                style="width:100%;padding:6px;background:#111;border:1px solid #444;color:#ccc;cursor:pointer;font-family:monospace;font-size:11px;">Place
+                Sound at Camera</button>
+            <div class="ep-hint" style="margin-top:4px">or press SPACE</div>
+        </div>
         <div class="ep-section">
-            <div class="ep-row"><span class="ep-label">Placed Sounds</span><span id="soundCount" class="ep-hint">0</span></div>
+            <div class="ep-row"><span class="ep-label">Placed Sounds</span><span id="soundCount"
+                    class="ep-hint">0</span></div>
             <div id="soundList"></div>
         </div>
         <div class="ep-actions">
-            <button id="copyCodeBtn">Copy Code</button>
+            <button id="copyCodeBtn">Copy sounds.js</button>
             <button id="clearAllBtn">Clear All</button>
         </div>
-        <textarea id="codeOutput" readonly placeholder="// Code appears here — click to select all"></textarea>
+        <textarea id="codeOutput" readonly
+            placeholder="// sounds.js content will appear here&#10;// Copy it and replace the contents of sounds.js"></textarea>
     </div>
     <!-- <script src="audio.js"></script> -->
     <script>
@@ -276,6 +417,8 @@
             torch.range = 100;
             torch.diffuse = new BABYLON.Color3(1, 0.9, 0.7);
             torch.specular = new BABYLON.Color3(1, 0.9, 0.7);
+
+            scene.gravity = new BABYLON.Vector3(0, -0.5, 0);
 
             universalCamera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(-73, -12, -46), scene);
             universalCamera.attachControl(canvas, true);
@@ -332,6 +475,7 @@
                             merged.name = "sewers_collision_" + i;
                             merged.isVisible = false;
                             merged.isPickable = true;
+                            merged.checkCollisions = true;
                         }
                     });
                 }
@@ -341,9 +485,10 @@
                 }, 2000);
             });
 
-            var playerHeight = 2;
+            var playerHeight = 1.8;
             var rayLength = 1000;
-            var collisionDistance = 1.5;
+            var collisionDistance = 1.0;
+            var stepHeight = 1.2;
 
             scene.registerBeforeRender(function () {
                 // Update torch position and direction to follow camera
@@ -351,52 +496,39 @@
                 torch.direction = scene.activeCamera.getForwardRay().direction;
 
                 if (!isEditMode) {
-                    // Downward raycast for floor
-                    var downRay = new BABYLON.Ray(scene.activeCamera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
-                    var downHit = scene.pickWithRay(downRay);
+                    var pickPredicate = function (mesh) { return mesh.isPickable; };
+
+                    // Downward raycast for floor — snaps camera to ground + playerHeight
+                    var downRay = new BABYLON.Ray(universalCamera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
+                    var downHit = scene.pickWithRay(downRay, pickPredicate);
                     if (downHit.pickedMesh) {
-                        scene.activeCamera.position.y = downHit.pickedPoint.y + playerHeight;
+                        var targetY = downHit.pickedPoint.y + playerHeight;
+                        universalCamera.position.y += (targetY - universalCamera.position.y) * 0.2;
                     }
 
-                    // Get camera's forward direction (ignoring Y)
-                    var forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
+                    // Horizontal wall collisions — cast from chest height to ignore steps
+                    var castOrigin = universalCamera.position.clone();
+                    castOrigin.y -= (playerHeight - stepHeight);
+
+                    var forward = universalCamera.getDirection(BABYLON.Vector3.Forward());
                     forward.y = 0;
                     forward.normalize();
-
-                    // Calculate right direction
-                    var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
-                    right.normalize();
-
-                    // Left and backward directions
-                    var left = right.scale(-1);
+                    var right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up()).normalize();
                     var backward = forward.scale(-1);
+                    var left = right.scale(-1);
 
-                    // Raycast forward
-                    var forwardRay = new BABYLON.Ray(scene.activeCamera.position, forward, collisionDistance);
-                    var forwardHit = scene.pickWithRay(forwardRay);
-                    if (forwardHit.pickedMesh && forwardHit.distance < collisionDistance) {
-                        scene.activeCamera.position.addInPlace(backward.scale(collisionDistance - forwardHit.distance));
-                    }
-
-                    // Raycast backward
-                    var backwardRay = new BABYLON.Ray(scene.activeCamera.position, backward, collisionDistance);
-                    var backwardHit = scene.pickWithRay(backwardRay);
-                    if (backwardHit.pickedMesh && backwardHit.distance < collisionDistance) {
-                        scene.activeCamera.position.addInPlace(forward.scale(collisionDistance - backwardHit.distance));
-                    }
-
-                    // Raycast right
-                    var rightRay = new BABYLON.Ray(scene.activeCamera.position, right, collisionDistance);
-                    var rightHit = scene.pickWithRay(rightRay);
-                    if (rightHit.pickedMesh && rightHit.distance < collisionDistance) {
-                        scene.activeCamera.position.addInPlace(left.scale(collisionDistance - rightHit.distance));
-                    }
-
-                    // Raycast left
-                    var leftRay = new BABYLON.Ray(scene.activeCamera.position, left, collisionDistance);
-                    var leftHit = scene.pickWithRay(leftRay);
-                    if (leftHit.pickedMesh && leftHit.distance < collisionDistance) {
-                        scene.activeCamera.position.addInPlace(right.scale(collisionDistance - leftHit.distance));
+                    var directions = [
+                        { dir: forward, push: backward },
+                        { dir: backward, push: forward },
+                        { dir: right, push: left },
+                        { dir: left, push: right }
+                    ];
+                    for (var i = 0; i < directions.length; i++) {
+                        var ray = new BABYLON.Ray(castOrigin, directions[i].dir, collisionDistance);
+                        var hit = scene.pickWithRay(ray, pickPredicate);
+                        if (hit.pickedMesh && hit.distance < collisionDistance) {
+                            universalCamera.position.addInPlace(directions[i].push.scale(collisionDistance - hit.distance));
+                        }
                     }
                 }
 
@@ -419,22 +551,8 @@
             textInfo.height = "30px";
             stackPanel.addControl(textInfo);
 
-            // ================================================================
-            // ADD YOUR SOUNDS HERE
-            // ----------------------------------------------------------------
-            // Use edit mode (Ctrl+E) to find positions — press SPACE to place
-            // a sound marker, then copy the generated code below.
-            //
-            // AreaSound      — looping spatial audio (volume fades with distance)
-            // new AreaSound({ file: './assets/ambient.wav', x: 0, y: 0, z: 0, rolloff: 5 });
-            //
-            // OneShotCollisionSound — plays once when the player walks into the zone
-            // new OneShotCollisionSound({ file: './assets/trigger.wav', x: 0, y: 0, z: 0, w: 3 });
-            // ================================================================
-let areaSounds = [];
-areaSounds.push(new AreaSound({ file: "./audio/toneC3.ogg", x: -73, y: -10.45, z: -77.76, volume: 0.5, rolloff: 5, visible: false }));
-let triggerSounds = [];
-triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -89.85, y: -10.57, z: -24.51, volume: 0.5, w: 2.5, timeBetweenPlays: 2000, visible: false }));
+            initSounds();
+
             return scene;
         };
 
@@ -576,27 +694,20 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                     event.preventDefault();
                     isEditMode = !isEditMode;
                     if (isEditMode) {
-                        // Switch to ArcRotateCamera
-                        var currentPos = scene.activeCamera.position;
-                        var currentTarget = scene.activeCamera.getTarget ? scene.activeCamera.getTarget() : new BABYLON.Vector3(-73, -12, -73);
-                        // Small radius so orbit pivot is just in front of the camera
-                        var radius = 5;
-                        arcRotateCamera.radius = radius;
-                        // alpha/beta describe the vector FROM target TO camera, so use the back direction
-                        var lookDir = currentTarget.subtract(currentPos).normalize();
-                        var backDir = lookDir.negate();
-                        arcRotateCamera.alpha = Math.atan2(backDir.z, backDir.x);
-                        arcRotateCamera.beta = Math.acos(Math.max(-1, Math.min(1, backDir.y)));
-                        // Place target in front of camera so camera lands at currentPos
-                        arcRotateCamera.target = currentPos.add(lookDir.scale(radius));
+                        // Switch to ArcRotateCamera — place it exactly at the play camera's position
+                        var currentPos = universalCamera.position.clone();
+                        var lookDir = universalCamera.getTarget().subtract(currentPos).normalize();
+                        // Orbit pivot 5 units ahead; setPosition() derives alpha/beta/radius automatically
+                        arcRotateCamera.target = currentPos.add(lookDir.scale(5));
+                        arcRotateCamera.setPosition(currentPos);
                         scene.activeCamera = arcRotateCamera;
                         // Change to world light
                         torch.intensity = 0;
                         hemiLight.intensity = 2.0;
                         editPanel.style.display = 'flex';
                         // Import any externally registered sounds not yet tracked
-                        (window._registeredSounds || []).forEach(function(rs) {
-                            if (placedSounds.some(function(ps) { return ps._source === rs; })) return;
+                        (window._registeredSounds || []).forEach(function (rs) {
+                            if (placedSounds.some(function (ps) { return ps._source === rs; })) return;
                             var isArea = rs instanceof AreaSound;
                             var mesh = isArea ? rs.sphere : rs.box;
                             var pos = mesh ? mesh.position : rs.position;
@@ -606,12 +717,13 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                                 type: isArea ? 'AreaSound' : 'OneShotCollisionSound',
                                 file: isArea
                                     ? rs.sound.name
-                                    : (rs.sounds.length ? rs.sounds.map(function(s) { return s.name; }).join(', ') : rs.sound.name),
+                                    : (rs.sounds.length ? rs.sounds.map(function (s) { return s.name; }).join(', ') : rs.sound.name),
                                 x: parseFloat(pos.x.toFixed(2)),
                                 y: parseFloat(pos.y.toFixed(2)),
                                 z: parseFloat(pos.z.toFixed(2)),
                                 volume: rs.volume,
                                 rolloff: isArea ? rs.rolloff : undefined,
+                                minDistance: isArea ? rs.minDistance : undefined,
                                 w: !isArea ? rs.w : undefined,
                                 timeBetweenPlays: !isArea ? rs.timeBetweenPlays : undefined
                             };
@@ -626,22 +738,53 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                             updateGhostMesh(config);
                             placedSounds.push(config);
                         });
+                        // Restore from localStorage if nothing is placed yet
+                        if (placedSounds.length === 0) {
+                            try {
+                                var saved = localStorage.getItem('ks_sounds');
+                                if (saved) {
+                                    var restored = JSON.parse(saved);
+                                    restored.forEach(function (data) {
+                                        var idx = placedSounds.length;
+                                        var isArea = data.type === 'AreaSound';
+                                        var ghostMat = new BABYLON.StandardMaterial('ghostMat_r' + idx, scene);
+                                        ghostMat.wireframe = true;
+                                        ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
+                                        var mesh = isArea
+                                            ? BABYLON.MeshBuilder.CreateSphere('ghost_r' + idx, { diameter: 1 }, scene)
+                                            : BABYLON.MeshBuilder.CreateBox('ghost_r' + idx, { size: 1 }, scene);
+                                        mesh.material = ghostMat;
+                                        mesh.position = new BABYLON.Vector3(data.x, data.y, data.z);
+                                        data.ghostMesh = mesh;
+                                        updateGhostMesh(data);
+                                        placedSounds.push(data);
+                                    });
+                                    if (restored.length > 0) {
+                                        var bar = document.getElementById('autoSaveBar');
+                                        if (bar) { bar.style.display = 'block'; bar.textContent = 'Restored ' + restored.length + ' sound' + (restored.length !== 1 ? 's' : '') + ' from auto-save'; }
+                                    }
+                                }
+                            } catch (e) { }
+                        }
+
                         updateSoundList();
                         generateCode();
-                        placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.isVisible = true; });
+                        placedSounds.forEach(function (s) { if (s.ghostMesh) s.ghostMesh.isVisible = true; });
                         // Add wheel and pinch listeners
                         canvas.addEventListener('wheel', wheelListener, { passive: false });
                         window.addEventListener('touchstart', touchStartListener, { passive: true });
                         window.addEventListener('touchmove', touchMoveListener, { passive: false });
                         window.addEventListener('touchend', touchEndListener, { passive: true });
                     } else {
-                        // Switch back to UniversalCamera
+                        // Switch back to UniversalCamera — sync position/look from arc camera
+                        universalCamera.position.copyFrom(arcRotateCamera.position);
+                        universalCamera.setTarget(arcRotateCamera.target.clone());
                         scene.activeCamera = universalCamera;
                         // Change back to torch light
                         torch.intensity = 1000;
                         hemiLight.intensity = 0.02;
                         editPanel.style.display = 'none';
-                        placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.isVisible = false; });
+                        placedSounds.forEach(function (s) { if (s.ghostMesh) s.ghostMesh.isVisible = false; });
                         // Remove wheel and pinch listeners
                         canvas.removeEventListener('wheel', wheelListener);
                         window.removeEventListener('touchstart', touchStartListener);
@@ -676,11 +819,11 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
         // --- Sound Editor Panel ---
 
         // Slider value displays — also live-update selected sound
-        document.getElementById('soundVolume').addEventListener('input', function() {
+        document.getElementById('soundVolume').addEventListener('input', function () {
             document.getElementById('volumeVal').textContent = this.value;
             if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].volume = parseFloat(this.value); generateCode(); }
         });
-        document.getElementById('soundRolloff').addEventListener('input', function() {
+        document.getElementById('soundRolloff').addEventListener('input', function () {
             document.getElementById('rolloffVal').textContent = this.value;
             if (selectedSoundIndex !== -1) {
                 var s = placedSounds[selectedSoundIndex];
@@ -689,7 +832,11 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                 generateCode();
             }
         });
-        document.getElementById('soundWidth').addEventListener('input', function() {
+        document.getElementById('soundMinDist').addEventListener('input', function () {
+            document.getElementById('minDistVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].minDistance = parseFloat(this.value); generateCode(); }
+        });
+        document.getElementById('soundWidth').addEventListener('input', function () {
             document.getElementById('widthVal').textContent = this.value;
             if (selectedSoundIndex !== -1) {
                 var s = placedSounds[selectedSoundIndex];
@@ -698,11 +845,32 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                 generateCode();
             }
         });
-        document.getElementById('soundCooldown').addEventListener('input', function() {
+        document.getElementById('soundCooldown').addEventListener('input', function () {
             document.getElementById('cooldownVal').textContent = this.value;
             if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].timeBetweenPlays = parseInt(this.value); generateCode(); }
         });
-        document.getElementById('soundFile').addEventListener('input', function() {
+        document.getElementById('browseFileBtn').addEventListener('click', function () {
+            document.getElementById('soundFilePicker').click();
+        });
+
+        document.getElementById('soundFilePicker').addEventListener('change', function () {
+            if (!this.files || !this.files.length) return;
+            var name = this.files[0].name;
+            var path = './audio/' + name;
+            var fileInput = document.getElementById('soundFile');
+            // If multiple files already entered, append; otherwise replace
+            var existing = fileInput.value.trim();
+            if (existing && existing !== './assets/ambient.wav' && existing !== './audio/ambient.wav') {
+                fileInput.value = existing + ', ' + path;
+            } else {
+                fileInput.value = path;
+            }
+            fileInput.dispatchEvent(new Event('input'));
+            // Reset picker so the same file can be re-selected if needed
+            this.value = '';
+        });
+
+        document.getElementById('soundFile').addEventListener('input', function () {
             if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].file = this.value.trim(); updateSoundList(); generateCode(); }
         });
 
@@ -710,7 +878,7 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
             var scrubbing = false;
             var startX = 0;
             var startVal = 0;
-            labelEl.addEventListener('pointerdown', function(e) {
+            labelEl.addEventListener('pointerdown', function (e) {
                 if (e.target === inputEl) return;
                 scrubbing = true;
                 startX = e.clientX;
@@ -718,21 +886,21 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
                 labelEl.setPointerCapture(e.pointerId);
                 e.preventDefault();
             });
-            labelEl.addEventListener('pointermove', function(e) {
+            labelEl.addEventListener('pointermove', function (e) {
                 if (!scrubbing) return;
                 inputEl.value = parseFloat((startVal + (e.clientX - startX) * 0.1).toFixed(2));
                 inputEl.dispatchEvent(new Event('input'));
             });
-            labelEl.addEventListener('pointerup', function() { scrubbing = false; });
-            labelEl.addEventListener('pointercancel', function() { scrubbing = false; });
+            labelEl.addEventListener('pointerup', function () { scrubbing = false; });
+            labelEl.addEventListener('pointercancel', function () { scrubbing = false; });
         }
 
-        ['posX', 'posY', 'posZ'].forEach(function(id) {
+        ['posX', 'posY', 'posZ'].forEach(function (id) {
             makeScrubLabel(document.getElementById(id).parentElement, document.getElementById(id));
         });
 
-        ['posX', 'posY', 'posZ'].forEach(function(id) {
-            document.getElementById(id).addEventListener('input', function() {
+        ['posX', 'posY', 'posZ'].forEach(function (id) {
+            document.getElementById(id).addEventListener('input', function () {
                 if (selectedSoundIndex === -1) return;
                 var s = placedSounds[selectedSoundIndex];
                 var axis = id.slice(-1).toLowerCase(); // 'x', 'y', or 'z'
@@ -744,8 +912,8 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
         });
 
         // Toggle area/oneshot options
-        document.querySelectorAll('input[name="soundType"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="soundType"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
                 var isArea = this.value === 'AreaSound';
                 document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
                 document.getElementById('oneShotOptions').style.display = isArea ? 'none' : 'block';
@@ -773,6 +941,7 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
 
             if (type === 'AreaSound') {
                 config.rolloff = parseFloat(document.getElementById('soundRolloff').value);
+                config.minDistance = parseFloat(document.getElementById('soundMinDist').value);
                 // Unit sphere — scaled via updateGhostMesh
                 config.ghostMesh = BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene);
                 ghostMat.emissiveColor = new BABYLON.Color3(0, 0.8, 0.8);
@@ -791,6 +960,7 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
             placedSounds.push(config);
             updateSoundList();
             generateCode();
+            selectSound(placedSounds.length - 1);
         }
 
         function updateGhostMesh(s) {
@@ -804,7 +974,7 @@ triggerSounds.push(new OneShotCollisionSound({ file: "./audio/toneE4.wav", x: -8
         }
 
 
-function selectSound(i) {
+        function selectSound(i) {
             // Restore previous selection mesh appearance
             if (selectedSoundIndex !== -1 && placedSounds[selectedSoundIndex]) {
                 var prev = placedSounds[selectedSoundIndex];
@@ -852,6 +1022,8 @@ function selectSound(i) {
             if (isArea) {
                 document.getElementById('soundRolloff').value = s.rolloff;
                 document.getElementById('rolloffVal').textContent = s.rolloff;
+                document.getElementById('soundMinDist').value = s.minDistance !== undefined ? s.minDistance : 1;
+                document.getElementById('minDistVal').textContent = s.minDistance !== undefined ? s.minDistance : 1;
             } else {
                 document.getElementById('soundWidth').value = s.w;
                 document.getElementById('widthVal').textContent = s.w;
@@ -868,7 +1040,7 @@ function selectSound(i) {
             bar.style.display = 'flex';
             bar.innerHTML = '<span>Editing: ' + (isArea ? 'AreaSound' : 'OneShotCollision') + ' #' + (i + 1) + '</span>' +
                 '<button id="deselectBtn">✕ deselect</button>';
-            document.getElementById('deselectBtn').addEventListener('click', function() { selectSound(-1); });
+            document.getElementById('deselectBtn').addEventListener('click', function () { selectSound(-1); });
 
             updateSoundList();
         }
@@ -877,27 +1049,27 @@ function selectSound(i) {
             var list = document.getElementById('soundList');
             document.getElementById('soundCount').textContent = placedSounds.length;
             list.innerHTML = '';
-            placedSounds.forEach(function(s, i) {
+            placedSounds.forEach(function (s, i) {
                 var item = document.createElement('div');
                 item.className = 'sound-item' + (i === selectedSoundIndex ? ' selected' : '');
                 var isArea = s.type === 'AreaSound';
                 var fileName = s.file.split('/').pop().split(',')[0];
                 item.innerHTML =
                     '<span class="si-badge ' + (isArea ? 'area' : 'oneshot') + '">' +
-                        (isArea ? 'AREA' : 'SHOT') +
+                    (isArea ? 'AREA' : 'SHOT') +
                     '</span>' +
                     '<span class="si-info" title="' + s.file + '">' +
-                        fileName + ' (' + s.x + ', ' + s.y + ', ' + s.z + ')' +
+                    fileName + ' (' + s.x + ', ' + s.y + ', ' + s.z + ')' +
                     '</span>' +
                     '<button class="si-del" data-index="' + i + '">×</button>';
-                item.addEventListener('click', function(e) {
+                item.addEventListener('click', function (e) {
                     if (e.target.classList.contains('si-del')) return;
                     selectSound(i === selectedSoundIndex ? -1 : i);
                 });
                 list.appendChild(item);
             });
-            list.querySelectorAll('.si-del').forEach(function(btn) {
-                btn.addEventListener('click', function(e) {
+            list.querySelectorAll('.si-del').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var i = parseInt(this.getAttribute('data-index'));
                     if (i === selectedSoundIndex) selectSound(-1);
@@ -910,28 +1082,29 @@ function selectSound(i) {
         }
 
         function generateCode() {
-            var areaSounds = placedSounds.filter(function(s) { return s.type === 'AreaSound'; });
-            var oneShotSounds = placedSounds.filter(function(s) { return s.type === 'OneShotCollisionSound'; });
-            var lines = [];
+            var areaSounds = placedSounds.filter(function (s) { return s.type === 'AreaSound'; });
+            var oneShotSounds = placedSounds.filter(function (s) { return s.type === 'OneShotCollisionSound'; });
+            var inner = [];
 
             if (areaSounds.length > 0) {
-                lines.push('let areaSounds = [];');
-                areaSounds.forEach(function(s) {
-                    var files = s.file.split(',').map(function(f) { return '"' + f.trim() + '"'; });
+                inner.push('    let areaSounds = [];');
+                areaSounds.forEach(function (s) {
+                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
-                    lines.push('areaSounds.push(new AreaSound({ file: ' + fileStr +
+                    inner.push('    areaSounds.push(new AreaSound({ file: ' + fileStr +
                         ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
                         ', volume: ' + s.volume + ', rolloff: ' + s.rolloff +
+                        ', minDistance: ' + (s.minDistance !== undefined ? s.minDistance : 1) +
                         ', visible: false }));');
                 });
             }
 
             if (oneShotSounds.length > 0) {
-                lines.push('let triggerSounds = [];');
-                oneShotSounds.forEach(function(s) {
-                    var files = s.file.split(',').map(function(f) { return '"' + f.trim() + '"'; });
+                inner.push('    let triggerSounds = [];');
+                oneShotSounds.forEach(function (s) {
+                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
-                    lines.push('triggerSounds.push(new OneShotCollisionSound({ file: ' + fileStr +
+                    inner.push('    triggerSounds.push(new OneShotCollisionSound({ file: ' + fileStr +
                         ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
                         ', volume: ' + s.volume + ', w: ' + s.w +
                         ', timeBetweenPlays: ' + s.timeBetweenPlays +
@@ -939,22 +1112,45 @@ function selectSound(i) {
                 });
             }
 
-            document.getElementById('codeOutput').value = lines.join('\n');
+            var lines = [
+                '// ============================================================',
+                '// SOUNDS — this is the only file you need to edit',
+                '// ============================================================',
+                'function initSounds() {'
+            ].concat(inner.length ? inner : ['    // No sounds placed yet.']).concat(['}']);
+
+            var code = lines.join('\n');
+            document.getElementById('codeOutput').value = code;
+
+            // Auto-save to localStorage
+            try {
+                var snapshot = placedSounds.map(function (s) {
+                    return {
+                        type: s.type, file: s.file, x: s.x, y: s.y, z: s.z,
+                        volume: s.volume, rolloff: s.rolloff, minDistance: s.minDistance, w: s.w, timeBetweenPlays: s.timeBetweenPlays
+                    };
+                });
+                localStorage.setItem('ks_sounds', JSON.stringify(snapshot));
+                var now = new Date();
+                var t = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+                var bar = document.getElementById('autoSaveBar');
+                if (bar) { bar.style.display = 'block'; bar.textContent = 'Auto-saved at ' + t + ' (' + snapshot.length + ' sound' + (snapshot.length !== 1 ? 's' : '') + ')'; }
+            } catch (e) { }
         }
 
-        document.getElementById('codeOutput').addEventListener('click', function() {
+        document.getElementById('codeOutput').addEventListener('click', function () {
             if (!this.value) return;
             this.focus();
             this.select();
         });
 
-        document.getElementById('copyCodeBtn').addEventListener('click', function() {
+        document.getElementById('copyCodeBtn').addEventListener('click', function () {
             var btn = this;
             var ta = document.getElementById('codeOutput');
             if (!ta.value) return;
             function onSuccess() {
                 btn.textContent = 'Copied!';
-                setTimeout(function() { btn.textContent = 'Copy Code'; }, 1500);
+                setTimeout(function () { btn.textContent = 'Copy Code'; }, 1500);
             }
             function execFallback() {
                 ta.focus();
@@ -969,11 +1165,15 @@ function selectSound(i) {
             }
         });
 
-        document.getElementById('clearAllBtn').addEventListener('click', function() {
-            placedSounds.forEach(function(s) { if (s.ghostMesh) s.ghostMesh.dispose(); });
+        document.getElementById('clearAllBtn').addEventListener('click', function () {
+            placedSounds.forEach(function (s) { if (s.ghostMesh) s.ghostMesh.dispose(); });
             placedSounds = [];
             updateSoundList();
             generateCode();
+        });
+
+        document.getElementById('placeSoundBtn').addEventListener('click', function () {
+            if (isEditMode) placeSoundAtCamera();
         });
     </script>
 </body>
