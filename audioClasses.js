@@ -1,6 +1,8 @@
 var _scene = null;
 function initAudio(sceneRef) { _scene = sceneRef; }
 
+/* Utility classes for BabylonJS Sound classes - Rory Walsh 2024 */
+
 /* One shot collision sound class that creates an optional visible mesh for testing.
 
 OneShotCollisionSound({file:'string', x: number, z: number, w: number, visible: true/false, color: 'string', volume:number, timeBetweenPlays:number})
@@ -52,7 +54,6 @@ class OneShotCollisionSound {
             args.file.forEach(sound => {
                 this.sounds.push(new BABYLON.Sound(sound, sound, _scene, function () {
                     // Call with the sound is ready to be played (loaded & decoded)
-                    // TODO: add your logic
                     console.log(sound);
                 }, { loop: false, autoplay: false, spatialSound: false, volume: this.volume }));
             })
@@ -95,11 +96,14 @@ class AreaSound {
         this.color = (typeof args.color === 'undefined' ? 'white' : args.color);
         this.visible = (typeof args.visible === 'undefined' ? true : args.visible);
         this.name = (typeof args.name === 'undefined' ? args.file : args.name);
-        this.rolloff = (typeof args.rolloff === 'undefined' ? 5 : args.rolloff);
+        this.rolloff = (typeof args.rolloff === 'undefined' ? 1 : args.rolloff);
         this.volume = (typeof args.volume === 'undefined' ? 1 : args.volume);
+        this.minDistance = (typeof args.minDistance === 'undefined' ? 1 : args.minDistance);
 
         this.position = new BABYLON.Vector3(args.x, this.y, args.z);
         let size = (8 / this.rolloff) * 3;
+        // sphereRadius = the outer edge — beyond this, volume is 0
+        this.sphereRadius = size / 2;
         this.sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 1, diameterY: size, diameterX: size, diameterZ: size }, _scene); //scene is optional and defaults to the current scene
         this.sphere.material = new BABYLON.StandardMaterial("Mat", _scene);
         const [, r, g, b, a] = colorKeywordToRGB(this.color).replace(/\s/g, "").match(/rgba?\((\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?\)/i);
@@ -112,12 +116,13 @@ class AreaSound {
 
         //this.sphere.scaling = new BABYLON.Vector3(this.w, 1, this.h);
         this.sphere.position = new BABYLON.Vector3(args.x, this.y, args.z);
-        // Create and load the sound async
+        this.sphere.checkCollisions = false;
+        this.sphere.isPickable = false;
+        // Create and load the sound — NOT spatial; we manage volume manually per frame
         const _self = this;
         this.sound = new BABYLON.Sound(this.name, args.file, _scene, function () {
             console.log(args.file + " is ready to be played!");
-            _self.sound.attachToMesh(_self.sphere);
-        }, { loop: true, autoplay: true, spatialSound: true, distanceModel: "exponential", volume: _self.volume, rolloffFactor: _self.rolloff });
+        }, { loop: true, autoplay: true, spatialSound: false, volume: 0 });
         (window._registeredSounds = window._registeredSounds || []).push(this);
     }
 };
@@ -135,13 +140,35 @@ class AreaSound {
  */
 function startSoundCollisions(camera) {
     _scene.onBeforeRenderObservable.add(function () {
+        var cam = _scene.activeCamera || camera;
         (window._registeredSounds || []).forEach(function (s) {
+            // Unity-style attenuation:
+            // outside sphereRadius  -> 0
+            // inside minDistance   -> full volume
+            // between              -> exponential falloff
+            if (s instanceof AreaSound && s.sound) {
+                var pos = s.sphere ? s.sphere.position : s.position;
+                var dist = BABYLON.Vector3.Distance(cam.position, pos);
+                var gain;
+                if (dist >= s.sphereRadius) {
+                    gain = 0;
+                } else if (dist <= s.minDistance) {
+                    gain = 1;
+                } else {
+                    // Normalise distance into [0..1] across the fade zone
+                    var t = (dist - s.minDistance) / (s.sphereRadius - s.minDistance);
+                    // Exponential curve: 1 at t=0, 0 at t=1, shape controlled by rolloff
+                    gain = Math.pow(1 - t, s.rolloff);
+                }
+                s.sound.setVolume(s.volume * gain);
+            }
+
             if (!(s instanceof OneShotCollisionSound) || !s.box) return;
             var b = s.box.getBoundingInfo().boundingBox;
-            var p = camera.position;
+            var p = cam.position;
             var inside = p.x >= b.minimumWorld.x && p.x <= b.maximumWorld.x
-                      && p.y >= b.minimumWorld.y && p.y <= b.maximumWorld.y
-                      && p.z >= b.minimumWorld.z && p.z <= b.maximumWorld.z;
+                && p.y >= b.minimumWorld.y && p.y <= b.maximumWorld.y
+                && p.z >= b.minimumWorld.z && p.z <= b.maximumWorld.z;
             if (inside) {
                 s.play();
             } else {

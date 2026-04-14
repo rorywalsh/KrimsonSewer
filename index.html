@@ -302,6 +302,24 @@
             box-sizing: border-box;
             padding: 6px 10px;
         }
+
+        #editPanel .ep-actions button.ep-dirty {
+            animation: dirtyPulse 1.5s ease-in-out infinite;
+            border-color: #ff4444;
+            color: #ff8888;
+        }
+
+        @keyframes dirtyPulse {
+
+            0%,
+            100% {
+                background: #111;
+            }
+
+            50% {
+                background: #331111;
+            }
+        }
     </style>
 </head>
 
@@ -379,6 +397,7 @@
         var isEditMode = false;
         var placedSounds = [];
         var selectedSoundIndex = -1;
+        var _soundsDirty = false;
         var universalCamera = null;
         var arcRotateCamera = null;
         var hemiLight = null;
@@ -507,7 +526,8 @@
                     }
                 }
 
-                textInfo.text = "Player's position X:" + (scene.activeCamera.position.x).toFixed(2) + " Z:" + (scene.activeCamera.position.z).toFixed(2) + " Y:" + (scene.activeCamera.position.y).toFixed(2) + (isEditMode ? " [EDIT MODE]" : "");
+                textInfo.text = isEditMode ? "X:" + (scene.activeCamera.position.x).toFixed(2) + "  Y:" + (scene.activeCamera.position.y).toFixed(2) + "  Z:" + (scene.activeCamera.position.z).toFixed(2) + "  [EDIT MODE]" : "";
+                dirtyInfo.text = (!isEditMode && _soundsDirty) ? "\u26A0  Unsaved sounds  \u2014  press Ctrl+E then copy sounds.js" : "";
             });
 
 
@@ -521,10 +541,22 @@
             advancedTexture.addControl(stackPanel);
 
             var textInfo = new BABYLON.GUI.TextBlock();
-            textInfo.color = "white";
-            textInfo.fontSize = 16;
-            textInfo.height = "30px";
+            textInfo.color = "#aaaaaa";
+            textInfo.fontSize = 13;
+            textInfo.height = "24px";
             stackPanel.addControl(textInfo);
+
+            var dirtyInfo = new BABYLON.GUI.TextBlock();
+            dirtyInfo.color = "#ffcc00";
+            dirtyInfo.fontSize = 14;
+            dirtyInfo.fontWeight = "bold";
+            dirtyInfo.height = "28px";
+            dirtyInfo.paddingBottom = "10px";
+            dirtyInfo.shadowColor = "black";
+            dirtyInfo.shadowOffsetX = 1;
+            dirtyInfo.shadowOffsetY = 1;
+            dirtyInfo.shadowBlur = 4;
+            stackPanel.addControl(dirtyInfo);
 
             initSounds();
 
@@ -732,6 +764,7 @@
                                         mesh.position = new BABYLON.Vector3(data.x, data.y, data.z);
                                         data.ghostMesh = mesh;
                                         updateGhostMesh(data);
+                                        createLiveSound(data);
                                         placedSounds.push(data);
                                     });
                                     if (restored.length > 0) {
@@ -744,6 +777,8 @@
 
                         updateSoundList();
                         generateCode();
+                        _soundsDirty = false;
+                        updateCopyButtonState();
                         placedSounds.forEach(function (s) { if (s.ghostMesh) s.ghostMesh.isVisible = true; });
                         // Add wheel and pinch listeners
                         canvas.addEventListener('wheel', wheelListener, { passive: false });
@@ -791,12 +826,24 @@
             engine.resize();
         });
 
+        // Warn about unsaved sound changes
+        window.addEventListener('beforeunload', function (e) {
+            if (_soundsDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
         // --- Sound Editor Panel ---
 
         // Slider value displays — also live-update selected sound
         document.getElementById('soundVolume').addEventListener('input', function () {
             document.getElementById('volumeVal').textContent = this.value;
-            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].volume = parseFloat(this.value); generateCode(); }
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].volume = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.volume = parseFloat(this.value);
+                generateCode();
+            }
         });
         document.getElementById('soundRolloff').addEventListener('input', function () {
             document.getElementById('rolloffVal').textContent = this.value;
@@ -804,12 +851,21 @@
                 var s = placedSounds[selectedSoundIndex];
                 s.rolloff = parseFloat(this.value);
                 updateGhostMesh(s);
+                if (s._source) {
+                    s._source.rolloff = s.rolloff;
+                    var sz = (8 / s.rolloff) * 3;
+                    s._source.sphereRadius = sz / 2;
+                }
                 generateCode();
             }
         });
         document.getElementById('soundMinDist').addEventListener('input', function () {
             document.getElementById('minDistVal').textContent = this.value;
-            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].minDistance = parseFloat(this.value); generateCode(); }
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].minDistance = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.minDistance = parseFloat(this.value);
+                generateCode();
+            }
         });
         document.getElementById('soundWidth').addEventListener('input', function () {
             document.getElementById('widthVal').textContent = this.value;
@@ -817,6 +873,10 @@
                 var s = placedSounds[selectedSoundIndex];
                 s.w = parseFloat(this.value);
                 updateGhostMesh(s);
+                if (s._source && s._source.box) {
+                    s._source.w = s.w;
+                    s._source.box.scaling.setAll(s.w);
+                }
                 generateCode();
             }
         });
@@ -846,7 +906,14 @@
         });
 
         document.getElementById('soundFile').addEventListener('input', function () {
-            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].file = this.value.trim(); updateSoundList(); generateCode(); }
+            if (selectedSoundIndex !== -1) {
+                var s = placedSounds[selectedSoundIndex];
+                s.file = this.value.trim();
+                destroyLiveSound(s);
+                createLiveSound(s);
+                updateSoundList();
+                generateCode();
+            }
         });
 
         function makeScrubLabel(labelEl, inputEl) {
@@ -881,6 +948,10 @@
                 var axis = id.slice(-1).toLowerCase(); // 'x', 'y', or 'z'
                 s[axis] = parseFloat(this.value) || 0;
                 if (s.ghostMesh) s.ghostMesh.position[axis] = s[axis];
+                if (s._source) {
+                    var m = s._source instanceof AreaSound ? s._source.sphere : s._source.box;
+                    if (m) m.position[axis] = s[axis];
+                }
                 updateSoundList();
                 generateCode();
             });
@@ -932,6 +1003,7 @@
             config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
             updateGhostMesh(config);
 
+            createLiveSound(config);
             placedSounds.push(config);
             updateSoundList();
             generateCode();
@@ -945,6 +1017,66 @@
                 s.ghostMesh.scaling.setAll(d);
             } else {
                 s.ghostMesh.scaling.setAll(s.w);
+            }
+        }
+
+        function createLiveSound(config) {
+            try {
+                var files = config.file.split(',').map(function (f) { return f.trim(); }).filter(Boolean);
+                if (!files.length) return;
+                if (config.type === 'AreaSound') {
+                    config._source = new AreaSound({
+                        file: files[0],
+                        x: config.x, y: config.y, z: config.z,
+                        volume: config.volume,
+                        rolloff: config.rolloff !== undefined ? config.rolloff : 1,
+                        minDistance: config.minDistance !== undefined ? config.minDistance : 1,
+                        visible: false
+                    });
+                } else {
+                    config._source = new OneShotCollisionSound({
+                        file: files,
+                        x: config.x, y: config.y, z: config.z,
+                        volume: config.volume,
+                        w: config.w !== undefined ? config.w : 3,
+                        timeBetweenPlays: config.timeBetweenPlays || 2000,
+                        secondsBeforeNextPlay: ((config.timeBetweenPlays || 2000) / 1000),
+                        visible: false
+                    });
+                }
+                if (config._source) {
+                    var m = config.type === 'AreaSound' ? config._source.sphere : config._source.box;
+                    if (m) { m.isPickable = false; m.checkCollisions = false; }
+                }
+            } catch (e) {
+                console.warn('Live preview: could not create sound', e);
+            }
+        }
+
+        function destroyLiveSound(config) {
+            if (!config || !config._source) return;
+            var src = config._source;
+            if (src instanceof AreaSound) {
+                if (src.sound) { try { src.sound.stop(); src.sound.dispose(); } catch (e) { } }
+                if (src.sphere) src.sphere.dispose();
+            } else if (src instanceof OneShotCollisionSound) {
+                if (src.sounds) src.sounds.forEach(function (s) { try { s.stop(); s.dispose(); } catch (e) { } });
+                if (src.sound) { try { src.sound.stop(); src.sound.dispose(); } catch (e) { } }
+                if (src.box) src.box.dispose();
+            }
+            var idx = (window._registeredSounds || []).indexOf(src);
+            if (idx !== -1) window._registeredSounds.splice(idx, 1);
+            config._source = null;
+        }
+
+        function updateCopyButtonState() {
+            var btn = document.getElementById('copyCodeBtn');
+            if (_soundsDirty) {
+                btn.classList.add('ep-dirty');
+                btn.textContent = '\u26A0 Copy sounds.js';
+            } else {
+                btn.classList.remove('ep-dirty');
+                btn.textContent = 'Copy sounds.js';
             }
         }
 
@@ -1048,6 +1180,7 @@
                     e.stopPropagation();
                     var i = parseInt(this.getAttribute('data-index'));
                     if (i === selectedSoundIndex) selectSound(-1);
+                    destroyLiveSound(placedSounds[i]);
                     if (placedSounds[i].ghostMesh) placedSounds[i].ghostMesh.dispose();
                     placedSounds.splice(i, 1);
                     updateSoundList();
@@ -1097,6 +1230,9 @@
             var code = lines.join('\n');
             document.getElementById('codeOutput').value = code;
 
+            _soundsDirty = true;
+            updateCopyButtonState();
+
             // Auto-save to localStorage
             try {
                 var snapshot = placedSounds.map(function (s) {
@@ -1124,8 +1260,10 @@
             var ta = document.getElementById('codeOutput');
             if (!ta.value) return;
             function onSuccess() {
+                _soundsDirty = false;
                 btn.textContent = 'Copied!';
-                setTimeout(function () { btn.textContent = 'Copy Code'; }, 1500);
+                btn.classList.remove('ep-dirty');
+                setTimeout(function () { updateCopyButtonState(); }, 1500);
             }
             function execFallback() {
                 ta.focus();
@@ -1141,7 +1279,7 @@
         });
 
         document.getElementById('clearAllBtn').addEventListener('click', function () {
-            placedSounds.forEach(function (s) { if (s.ghostMesh) s.ghostMesh.dispose(); });
+            placedSounds.forEach(function (s) { destroyLiveSound(s); if (s.ghostMesh) s.ghostMesh.dispose(); });
             placedSounds = [];
             updateSoundList();
             generateCode();
