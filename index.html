@@ -330,6 +330,62 @@
                 background: #331111;
             }
         }
+
+        #editPanel .fs-file-list {
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        #editPanel .fs-file-chip {
+            display: flex;
+            align-items: center;
+            padding: 3px 2px;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 11px;
+            gap: 4px;
+        }
+
+        #editPanel .fs-file-chip:hover {
+            background: #111;
+        }
+
+        #editPanel .fs-chip-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #ccc;
+        }
+
+        #editPanel .fs-chip-del {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 0 2px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        #editPanel .fs-chip-del:hover {
+            color: #ff4444;
+        }
+
+        #editPanel .fs-add-btn {
+            background: #111;
+            border: 1px solid #444;
+            color: #ccc;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 2px 6px;
+        }
+
+        #editPanel .fs-add-btn:hover {
+            background: #222;
+            border-color: #888;
+        }
     </style>
 </head>
 
@@ -423,6 +479,41 @@
                     class="ep-hint">0</span></div>
             <div id="soundList"></div>
         </div>
+        <div id="footstepSection" class="ep-section" style="border-top:2px solid #2a0a1e">
+            <div class="ep-row" style="margin-bottom:6px">
+                <span style="color:#ff6688;font-size:11px;letter-spacing:1px;font-weight:bold">FOOTSTEPS</span>
+            </div>
+            <div class="ep-row"><span class="ep-label">Volume</span><span id="fsVolumeVal">0.7</span></div>
+            <input type="range" id="fsVolume" min="0" max="1" step="0.05" value="0.7">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Volume Variation</span><span
+                    id="fsVolVariationVal">0.2</span></div>
+            <input type="range" id="fsVolVariation" min="0" max="1" step="0.05" value="0.2">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Pitch Variation</span><span
+                    id="fsPitchVariationVal">0.1</span></div>
+            <input type="range" id="fsPitchVariation" min="0" max="1" step="0.05" value="0.1">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Stride Length</span><span
+                    id="fsStepIntervalVal">2.0</span></div>
+            <input type="range" id="fsStepInterval" min="0.5" max="5" step="0.1" value="2.0">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Step Variation</span><span
+                    id="fsStepVariationVal">0.2</span></div>
+            <input type="range" id="fsStepVariation" min="0" max="1" step="0.05" value="0.2">
+            <div style="margin-top:8px">
+                <div class="ep-row" style="margin-bottom:4px">
+                    <span class="ep-label" style="color:#88ccff">DRY FOOTSTEPS</span>
+                    <button class="fs-add-btn" id="addDryFilesBtn">+ Add Files…</button>
+                </div>
+                <div id="dryFileList" class="fs-file-list"></div>
+                <input type="file" id="dryFilePicker" accept="audio/*" multiple style="display:none">
+            </div>
+            <div style="margin-top:8px">
+                <div class="ep-row" style="margin-bottom:4px">
+                    <span class="ep-label" style="color:#88ffcc">WATER FOOTSTEPS</span>
+                    <button class="fs-add-btn" id="addWetFilesBtn">+ Add Files…</button>
+                </div>
+                <div id="wetFileList" class="fs-file-list"></div>
+                <input type="file" id="wetFilePicker" accept="audio/*" multiple style="display:none">
+            </div>
+        </div>
         <div class="ep-actions">
             <button id="copyCodeBtn">Copy sounds.js</button>
             <button id="clearAllBtn">Clear All</button>
@@ -438,6 +529,7 @@
         var placedSounds = [];
         var selectedSoundIndex = -1;
         var _soundsDirty = false;
+        var footstepConfig = { dryFiles: [], wetFiles: [], volume: 0.7, volumeVariation: 0.2, pitchVariation: 0.1, strideLength: 2.0, stepIntervalVariation: 0.2 };
         var universalCamera = null;
         var arcRotateCamera = null;
         var hemiLight = null;
@@ -879,6 +971,42 @@
                             } catch (e) { }
                         }
 
+                        // Restore footstep config from localStorage or running FootstepSystem
+                        try {
+                            var savedFs = localStorage.getItem('ks_footsteps');
+                            if (savedFs) {
+                                var fd = JSON.parse(savedFs);
+                                footstepConfig.dryFiles = fd.dryFiles || [];
+                                footstepConfig.wetFiles = fd.wetFiles || [];
+                                footstepConfig.volume = typeof fd.volume === 'number' ? fd.volume : 0.7;
+                                footstepConfig.volumeVariation = typeof fd.volumeVariation === 'number' ? fd.volumeVariation : 0.2;
+                                footstepConfig.pitchVariation = typeof fd.pitchVariation === 'number' ? fd.pitchVariation : 0.1;
+                                footstepConfig.strideLength = typeof fd.strideLength === 'number' ? fd.strideLength : 2.0;
+                                footstepConfig.stepIntervalVariation = typeof fd.stepIntervalVariation === 'number' ? fd.stepIntervalVariation : 0.2;
+                            } else if (window._footstepSystem) {
+                                var lfs = window._footstepSystem;
+                                footstepConfig.dryFiles = lfs.dryFiles.slice();
+                                footstepConfig.wetFiles = lfs.wetFiles.slice();
+                                footstepConfig.volume = lfs.volume;
+                                footstepConfig.volumeVariation = lfs.volumeVariation;
+                                footstepConfig.pitchVariation = lfs.pitchVariation;
+                                footstepConfig.strideLength = lfs.strideLength || 2.0;
+                                footstepConfig.stepIntervalVariation = lfs.stepIntervalVariation || 0.2;
+                            }
+                        } catch (e) { }
+                        document.getElementById('fsVolume').value = footstepConfig.volume;
+                        document.getElementById('fsVolumeVal').textContent = footstepConfig.volume;
+                        document.getElementById('fsVolVariation').value = footstepConfig.volumeVariation;
+                        document.getElementById('fsVolVariationVal').textContent = footstepConfig.volumeVariation;
+                        document.getElementById('fsPitchVariation').value = footstepConfig.pitchVariation;
+                        document.getElementById('fsPitchVariationVal').textContent = footstepConfig.pitchVariation;
+                        document.getElementById('fsStepInterval').value = footstepConfig.strideLength;
+                        document.getElementById('fsStepIntervalVal').textContent = footstepConfig.strideLength;
+                        document.getElementById('fsStepVariation').value = footstepConfig.stepIntervalVariation;
+                        document.getElementById('fsStepVariationVal').textContent = footstepConfig.stepIntervalVariation;
+                        updateFootstepList('dry');
+                        updateFootstepList('wet');
+
                         updateSoundList();
                         generateCode();
                         _soundsDirty = false;
@@ -1213,6 +1341,41 @@
             selectSound(placedSounds.length - 1);
         }
 
+        function rebuildLiveFootsteps() {
+            if (window._footstepSystem) {
+                window._footstepSystem.dispose();
+            }
+            if (footstepConfig.dryFiles.length > 0 || footstepConfig.wetFiles.length > 0) {
+                try { window._footstepSystem = new FootstepSystem(footstepConfig); } catch (e) { console.warn('FootstepSystem live preview:', e); }
+            }
+        }
+
+        function updateFootstepList(bank) {
+            var listId = bank === 'dry' ? 'dryFileList' : 'wetFileList';
+            var files = bank === 'dry' ? footstepConfig.dryFiles : footstepConfig.wetFiles;
+            var list = document.getElementById(listId);
+            list.innerHTML = '';
+            files.forEach(function (f, i) {
+                var chip = document.createElement('div');
+                chip.className = 'fs-file-chip';
+                var name = f.split('/').pop();
+                chip.innerHTML = '<span class="fs-chip-name" title="' + f + '">' + name + '</span>' +
+                    '<button class="fs-chip-del" data-bank="' + bank + '" data-index="' + i + '">\xd7</button>';
+                list.appendChild(chip);
+            });
+            list.querySelectorAll('.fs-chip-del').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var b = this.getAttribute('data-bank');
+                    var idx = parseInt(this.getAttribute('data-index'));
+                    if (b === 'dry') footstepConfig.dryFiles.splice(idx, 1);
+                    else footstepConfig.wetFiles.splice(idx, 1);
+                    updateFootstepList(b);
+                    rebuildLiveFootsteps();
+                    generateCode();
+                });
+            });
+        }
+
         function updateGhostMesh(s) {
             if (!s.ghostMesh) return;
             if (s.type === 'AreaSound') {
@@ -1512,6 +1675,20 @@
                 });
             }
 
+            if (footstepConfig.dryFiles.length > 0 || footstepConfig.wetFiles.length > 0) {
+                var dryStr = '[' + footstepConfig.dryFiles.map(function (f) { return '"' + f + '"'; }).join(', ') + ']';
+                var wetStr = '[' + footstepConfig.wetFiles.map(function (f) { return '"' + f + '"'; }).join(', ') + ']';
+                inner.push('    let footsteps = new FootstepSystem({');
+                inner.push('        dryFiles: ' + dryStr + ',');
+                inner.push('        wetFiles: ' + wetStr + ',');
+                inner.push('        volume: ' + footstepConfig.volume + ',');
+                inner.push('        volumeVariation: ' + footstepConfig.volumeVariation + ',');
+                inner.push('        pitchVariation: ' + footstepConfig.pitchVariation + ',');
+                inner.push('        strideLength: ' + footstepConfig.strideLength + ',');
+                inner.push('        stepIntervalVariation: ' + footstepConfig.stepIntervalVariation);
+                inner.push('    });');
+            }
+
             var lines = [
                 '// ============================================================',
                 '// SOUNDS — this is the only file you need to edit',
@@ -1537,6 +1714,7 @@
                     };
                 });
                 localStorage.setItem('ks_sounds', JSON.stringify(snapshot));
+                localStorage.setItem('ks_footsteps', JSON.stringify(footstepConfig));
                 var now = new Date();
                 var t = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
                 var bar = document.getElementById('autoSaveBar');
@@ -1582,6 +1760,66 @@
 
         document.getElementById('placeSoundBtn').addEventListener('click', function () {
             if (isEditMode) placeSoundAtCamera();
+        });
+
+        // Footstep controls
+        document.getElementById('fsVolume').addEventListener('input', function () {
+            document.getElementById('fsVolumeVal').textContent = this.value;
+            footstepConfig.volume = parseFloat(this.value);
+            if (window._footstepSystem) window._footstepSystem.volume = footstepConfig.volume;
+            generateCode();
+        });
+        document.getElementById('fsVolVariation').addEventListener('input', function () {
+            document.getElementById('fsVolVariationVal').textContent = this.value;
+            footstepConfig.volumeVariation = parseFloat(this.value);
+            if (window._footstepSystem) window._footstepSystem.volumeVariation = footstepConfig.volumeVariation;
+            generateCode();
+        });
+        document.getElementById('fsPitchVariation').addEventListener('input', function () {
+            document.getElementById('fsPitchVariationVal').textContent = this.value;
+            footstepConfig.pitchVariation = parseFloat(this.value);
+            if (window._footstepSystem) window._footstepSystem.pitchVariation = footstepConfig.pitchVariation;
+            generateCode();
+        });
+        document.getElementById('fsStepInterval').addEventListener('input', function () {
+            document.getElementById('fsStepIntervalVal').textContent = this.value;
+            footstepConfig.strideLength = parseFloat(this.value);
+            if (window._footstepSystem) { window._footstepSystem.strideLength = footstepConfig.strideLength; window._footstepSystem._currentStride = footstepConfig.strideLength; }
+            generateCode();
+        });
+        document.getElementById('fsStepVariation').addEventListener('input', function () {
+            document.getElementById('fsStepVariationVal').textContent = this.value;
+            footstepConfig.stepIntervalVariation = parseFloat(this.value);
+            if (window._footstepSystem) window._footstepSystem.stepIntervalVariation = footstepConfig.stepIntervalVariation;
+            generateCode();
+        });
+        document.getElementById('addDryFilesBtn').addEventListener('click', function () {
+            document.getElementById('dryFilePicker').click();
+        });
+        document.getElementById('addWetFilesBtn').addEventListener('click', function () {
+            document.getElementById('wetFilePicker').click();
+        });
+        document.getElementById('dryFilePicker').addEventListener('change', function () {
+            if (!this.files || !this.files.length) return;
+            Array.from(this.files).forEach(function (f) {
+                var path = './audio/' + f.name;
+                if (!footstepConfig.dryFiles.includes(path)) footstepConfig.dryFiles.push(path);
+            });
+            updateFootstepList('dry');
+            rebuildLiveFootsteps();
+            generateCode();
+            this.value = '';
+        });
+        document.getElementById('wetFilePicker').addEventListener('change', function () {
+            if (!this.files || !this.files.length) return;
+            Array.from(this.files).forEach(function (f) {
+                var path = './audio/' + f.name;
+                if (!footstepConfig.wetFiles.includes(path)) footstepConfig.wetFiles.push(path);
+            });
+            updateFootstepList('wet');
+            rebuildLiveFootsteps();
+            generateCode();
+            this.value = '';
         });
     </script>
 </body>

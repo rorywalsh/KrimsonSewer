@@ -510,6 +510,157 @@ class RandomNonSpatialSound {
     }
 }
 
+/*
+ * FootstepSystem - plays footstep sounds as the player moves
+ *
+ * FootstepSystem({
+ *   dryFiles: ['array', 'of', 'files'],   // played on normal ground
+ *   wetFiles:  ['array', 'of', 'files'],   // played when over water
+ *   volume: number (0-1),
+ *   volumeVariation: number (0-1),         // random ± offset per step
+ *   pitchVariation: number (0-1),          // random ± pitch offset per step
+ *   strideLength: number (world units),    // distance walked before next step fires
+ *   stepIntervalVariation: number (0-1)    // random ± fraction applied to strideLength
+ * })
+ */
+class FootstepSystem {
+    constructor(args) {
+        if (!_scene) throw new Error('FootstepSystem: must be created inside the createScene function.');
+
+        this.dryFiles = Array.isArray(args.dryFiles) ? args.dryFiles.slice() : [];
+        this.wetFiles = Array.isArray(args.wetFiles) ? args.wetFiles.slice() : [];
+        this.volume = (typeof args.volume === 'number') ? Math.max(0, Math.min(1, args.volume)) : 0.7;
+        this.volumeVariation = (typeof args.volumeVariation === 'number') ? Math.max(0, Math.min(1, args.volumeVariation)) : 0.0;
+        this.pitchVariation = (typeof args.pitchVariation === 'number') ? Math.max(0, args.pitchVariation) : 0.0;
+        this.strideLength = (typeof args.strideLength === 'number') ? Math.max(0.1, args.strideLength) : 2.0;
+        this.stepIntervalVariation = (typeof args.stepIntervalVariation === 'number') ? Math.max(0, Math.min(1, args.stepIntervalVariation)) : 0.0;
+
+        this._dryBuffers = [];
+        this._wetBuffers = [];
+        this._lastPosition = null;
+        this._lastStepTime = 0;
+        this._distanceSinceLastStep = 0;
+        this._currentStride = this.strideLength;
+        this._wasStationary = true;
+
+        var audioEngine = BABYLON.Engine.audioEngine;
+        this._ctx = (audioEngine && (audioEngine.audioContext || audioEngine._audioContext))
+            || new (window.AudioContext || window.webkitAudioContext)();
+
+        this.dryFiles.forEach(f => this._loadBuffer(f, this._dryBuffers));
+        this.wetFiles.forEach(f => this._loadBuffer(f, this._wetBuffers));
+
+        this._observer = _scene.onBeforeRenderObservable.add(() => this._update());
+        window._footstepSystem = this;
+    }
+
+    _loadBuffer(file, targetArray) {
+        var self = this;
+        fetch(file)
+            .then(r => r.arrayBuffer())
+            .then(ab => self._ctx.decodeAudioData(ab))
+            .then(buffer => { targetArray.push(buffer); })
+            .catch(e => console.warn('[FootstepSystem] Failed to load', file, e));
+    }
+
+    _update() {
+        var cam = _scene.activeCamera;
+        if (!cam || (cam.getClassName && cam.getClassName() === 'ArcRotateCamera')) return;
+
+        var now = performance.now();
+        var pos = cam.position;
+
+        if (!this._lastPosition) {
+            this._lastPosition = pos.clone();
+            return;
+        }
+
+        var dx = pos.x - this._lastPosition.x;
+        var dz = pos.z - this._lastPosition.z;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        this._lastPosition.copyFrom(pos);
+
+        // Standing still — reset distance accumulator so next movement starts fresh
+        if (dist < 0.001) {
+            this._distanceSinceLastStep = 0;
+            this._wasStationary = true;
+            return;
+        }
+
+        // First movement after standing still — fire immediately (skip stride accumulation)
+        if (this._wasStationary && now - this._lastStepTime >= 80) {
+            this._wasStationary = false;
+            this._distanceSinceLastStep = 0;
+
+            var isOverWaterImmediate = false;
+            var immediateRay = new BABYLON.Ray(pos, new BABYLON.Vector3(0, -1, 0), 1000);
+            var immediateHit = _scene.pickWithRay(immediateRay, function (mesh) { return mesh.isPickable; });
+            if (immediateHit && immediateHit.pickedMesh && immediateHit.pickedMesh.metadata && immediateHit.pickedMesh.metadata.isWater === true) {
+                isOverWaterImmediate = true;
+            }
+            var immediateBank = isOverWaterImmediate ? this._wetBuffers : this._dryBuffers;
+            if (immediateBank.length > 0) {
+                this._playBuffer(immediateBank[Math.floor(Math.random() * immediateBank.length)]);
+                this._lastStepTime = now;
+                var v = (Math.random() * 2 - 1) * this.stepIntervalVariation;
+                this._currentStride = Math.max(0.1, this.strideLength * (1 + v));
+            }
+            return;
+        }
+        this._wasStationary = false;
+
+        this._distanceSinceLastStep += dist;
+
+        // Fire when we've walked a full stride, with 80ms hard floor to prevent double-fires
+        if (this._distanceSinceLastStep < this._currentStride) return;
+        if (now - this._lastStepTime < 80) return;
+
+        // Water check via downward raycast
+        var isOverWater = false;
+        var downRay = new BABYLON.Ray(pos, new BABYLON.Vector3(0, -1, 0), 1000);
+        var hit = _scene.pickWithRay(downRay, function (mesh) { return mesh.isPickable; });
+        if (hit && hit.pickedMesh && hit.pickedMesh.metadata && hit.pickedMesh.metadata.isWater === true) {
+            isOverWater = true;
+        }
+
+        var bank = isOverWater ? this._wetBuffers : this._dryBuffers;
+        if (bank.length === 0) { this._distanceSinceLastStep = 0; return; }
+
+        this._playBuffer(bank[Math.floor(Math.random() * bank.length)]);
+        this._lastStepTime = now;
+        this._distanceSinceLastStep = 0;
+        // Pick a new randomised stride for the next step
+        var variation = (Math.random() * 2 - 1) * this.stepIntervalVariation;
+        this._currentStride = Math.max(0.1, this.strideLength * (1 + variation));
+    }
+
+    _playBuffer(buffer) {
+        if (this._ctx.state !== 'running') return;
+
+        var gain = this._ctx.createGain();
+        var vol = this.volume + (Math.random() * 2 - 1) * this.volumeVariation;
+        gain.gain.value = Math.max(0, Math.min(1, vol));
+        gain.connect(this._ctx.destination);
+
+        var src = this._ctx.createBufferSource();
+        src.buffer = buffer;
+        src.playbackRate.value = Math.max(0.1, 1 + (Math.random() * 2 - 1) * this.pitchVariation);
+        src.connect(gain);
+        src.start();
+        src.onended = function () { gain.disconnect(); };
+    }
+
+    dispose() {
+        if (this._observer) {
+            _scene.onBeforeRenderObservable.remove(this._observer);
+            this._observer = null;
+        }
+        this._dryBuffers = [];
+        this._wetBuffers = [];
+        if (window._footstepSystem === this) window._footstepSystem = null;
+    }
+}
+
 //https://stackoverflow.com/a/72808544
 const colorKeywordToRGB = (colorKeyword) => {
     // CREATE TEMPORARY ELEMENT
