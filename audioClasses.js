@@ -178,6 +178,338 @@ function startSoundCollisions(camera) {
     });
 }
 
+/* 
+ * LoopedSound - continuously loops a sound with optional crossfade
+ * 
+ * LoopedSound({
+ *   file: 'string',
+ *   volume: number (0-1),
+ *   playbackRate: number (pitch, default 1.0),
+ *   crossfade: number (seconds, 0 = no crossfade),
+ *   autoStart: boolean
+ * })
+ * 
+ * Example:
+ *   let drone = new LoopedSound({
+ *     file: './audio/drone.wav',
+ *     volume: 0.5,
+ *     playbackRate: 1.0,
+ *     crossfade: 1.0,
+ *     autoStart: true
+ *   });
+ */
+class LoopedSound {
+    constructor(args) {
+        if (!_scene) throw new Error('LoopedSound: must be created inside the createScene function.');
+
+        this.file = args.file;
+        this.volume = (typeof args.volume === 'number') ? Math.max(0, Math.min(1, args.volume)) : 0.5;
+        this.playbackRate = Math.max(0.01, (typeof args.playbackRate === 'number') ? args.playbackRate : 1);
+        // crossfade: 0 = no crossfade, 1 = fade in/out for half the clip length each
+        this.crossfade = (typeof args.crossfade === 'number') ? Math.max(0, Math.min(1, args.crossfade)) : 0;
+
+        this._ctx = null;
+        this._masterGain = null;
+        this._buffer = null;
+        this._activeSources = [];
+        this._scheduleTimer = null;
+        this._isRunning = false;
+
+        (window._registeredSounds = window._registeredSounds || []).push(this);
+        this._load();
+    }
+
+    _load() {
+        var self = this;
+        var audioEngine = BABYLON.Engine.audioEngine;
+        this._ctx = (audioEngine && (audioEngine.audioContext || audioEngine._audioContext))
+            || new (window.AudioContext || window.webkitAudioContext)();
+
+        console.log('[LoopedSound] AudioContext state on load:', this._ctx.state, '| file:', this.file);
+
+        this._masterGain = this._ctx.createGain();
+        this._masterGain.gain.value = this.volume;
+        this._masterGain.connect(this._ctx.destination);
+
+        fetch(this.file)
+            .then(function (r) { return r.arrayBuffer(); })
+            .then(function (ab) {
+                console.log('[LoopedSound] Decoding audio data...');
+                return self._ctx.decodeAudioData(ab);
+            })
+            .then(function (buffer) {
+                self._buffer = buffer;
+                console.log('[LoopedSound] Buffer decoded. Duration:', buffer.duration.toFixed(3), 's | playbackRate:', self.playbackRate, '| crossfade:', self.crossfade);
+                self._startWhenUnlocked();
+            })
+            .catch(function (e) { console.warn('[LoopedSound] Failed to load', self.file, e); });
+    }
+
+    _startWhenUnlocked() {
+        var self = this;
+        var ctx = this._ctx;
+
+        console.log('[LoopedSound] _startWhenUnlocked, ctx.state:', ctx.state);
+
+        if (ctx.state === 'running') {
+            this._play();
+            return;
+        }
+
+        var audioEngine = BABYLON.Engine.audioEngine;
+        if (audioEngine && audioEngine.onAudioUnlockedObservable) {
+            console.log('[LoopedSound] Waiting for BabylonJS audio unlock...');
+            audioEngine.onAudioUnlockedObservable.addOnce(function () {
+                console.log('[LoopedSound] Audio unlocked via BabylonJS, ctx.state:', ctx.state);
+                if (!self._isRunning) { self._play(); }
+            });
+        } else {
+            console.log('[LoopedSound] No onAudioUnlockedObservable, polling...');
+            (function poll() {
+                ctx.resume().then(function () {
+                    console.log('[LoopedSound] poll: ctx.state after resume:', ctx.state);
+                    if (!self._isRunning && ctx.state === 'running') { self._play(); }
+                    else if (!self._isRunning) { setTimeout(poll, 200); }
+                });
+            })();
+        }
+    }
+
+    _play() {
+        if (this._isRunning || !this._buffer) {
+            console.warn('[LoopedSound] _play() called but isRunning:', this._isRunning, 'buffer:', !!this._buffer);
+            return;
+        }
+        this._isRunning = true;
+        console.log('[LoopedSound] _play() starting. crossfade:', this.crossfade, '| bufferDuration:', this._buffer.duration.toFixed(3));
+
+        if (this.crossfade <= 0) {
+            // Single looping node — Web Audio handles the loop point exactly, fully JS-freeze-proof.
+            var src = this._ctx.createBufferSource();
+            src.buffer = this._buffer;
+            src.loop = true;
+            src.playbackRate.value = this.playbackRate;
+            src.connect(this._masterGain);
+            src.start(0);
+            this._activeSources.push(src);
+            console.log('[LoopedSound] Native loop started');
+        } else {
+            // Look-ahead scheduler: runs every 25ms, schedules instances 150ms ahead on
+            // the audio clock. Immune to JS-thread freezes — if we fall behind we just
+            // snap _nextAudioStart forward and continue without cascading.
+            this._nextAudioStart = this._ctx.currentTime;
+            this._instanceCount = 0;
+            this._runScheduler();
+        }
+    }
+
+    _runScheduler() {
+        if (!this._isRunning) { return; }
+        var ctx = this._ctx;
+        var lookahead = 0.15; // seconds to schedule ahead
+        var duration = this._buffer.duration / this.playbackRate;
+        // crossfade is a 0-1 fraction: crossfadeSecs = crossfade * (duration / 2)
+        // At crossfade=1, each instance fades for duration/2 and the next starts at the midpoint.
+        var crossfadeSecs = this.crossfade * (duration / 2);
+        var period = duration - crossfadeSecs;
+
+        // If JS was frozen and we're badly behind, snap forward to avoid a burst
+        if (this._nextAudioStart < ctx.currentTime - period) {
+            console.log('[LoopedSound] scheduler behind by', (ctx.currentTime - this._nextAudioStart).toFixed(3), 's — snapping forward');
+            this._nextAudioStart = ctx.currentTime;
+        }
+
+        // Schedule every instance whose start time falls within the lookahead window
+        while (this._nextAudioStart < ctx.currentTime + lookahead) {
+            this._scheduleOneInstance(this._nextAudioStart, this._instanceCount === 0);
+            this._instanceCount++;
+            this._nextAudioStart += period;
+        }
+
+        var self = this;
+        this._scheduleTimer = setTimeout(function () { self._runScheduler(); }, 25);
+    }
+
+    _scheduleOneInstance(audioStartTime, isFirst) {
+        var ctx = this._ctx;
+        var self = this;
+        var t = Math.max(audioStartTime, ctx.currentTime);
+        var duration = this._buffer.duration / this.playbackRate;
+        var crossfadeSecs = this.crossfade * (duration / 2);
+
+        console.log('[LoopedSound] scheduling instance #' + this._instanceCount,
+            '| t:', t.toFixed(3), '| duration:', duration.toFixed(3),
+            '| crossfadeSecs:', crossfadeSecs.toFixed(3), '| isFirst:', isFirst);
+
+        var gain = ctx.createGain();
+        gain.connect(this._masterGain);
+
+        var src = ctx.createBufferSource();
+        src.buffer = this._buffer;
+        src.playbackRate.value = this.playbackRate;
+        src.connect(gain);
+
+        if (isFirst || crossfadeSecs === 0) {
+            gain.gain.setValueAtTime(1.0, t);
+        } else {
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(1.0, t + crossfadeSecs);
+        }
+        if (crossfadeSecs > 0) {
+            gain.gain.setValueAtTime(1.0, t + duration - crossfadeSecs);
+            gain.gain.linearRampToValueAtTime(0, t + duration);
+        }
+
+        src.start(t);
+        src.stop(t + duration);
+
+        var srcRef = src;
+        var gainRef = gain;
+        this._activeSources.push(srcRef);
+        src.onended = function () {
+            gainRef.disconnect();
+            var idx = self._activeSources.indexOf(srcRef);
+            if (idx !== -1) { self._activeSources.splice(idx, 1); }
+            console.log('[LoopedSound] instance ended | active:', self._activeSources.length);
+        };
+    }
+
+    start() {
+        if (!this._isRunning) { this._startWhenUnlocked(); }
+    }
+
+    stop() {
+        this._isRunning = false;
+        if (this._scheduleTimer !== null) { clearTimeout(this._scheduleTimer); this._scheduleTimer = null; }
+        this._activeSources.forEach(function (src) { try { src.stop(); } catch (e) { } });
+        this._activeSources = [];
+        if (this._masterGain) { this._masterGain.gain.value = 0; }
+    }
+
+    setVolume(vol) {
+        this.volume = Math.max(0, Math.min(1, vol));
+        if (this._masterGain) { this._masterGain.gain.value = this.volume; }
+    }
+
+    setPlaybackRate(rate) {
+        this.playbackRate = Math.max(0.01, rate);
+        this._activeSources.forEach(function (src) { src.playbackRate.value = rate; });
+    }
+}
+
+/* 
+ * RandomNonSpatialSound - plays sounds at random intervals with pitch/amplitude variation
+ * 
+ * RandomNonSpatialSound({
+ *   file: 'string' or ['array', 'of', 'files'],
+ *   minInterval: number (ms),
+ *   maxInterval: number (ms),
+ *   pitchVariation: number,
+ *   amplitudeVariation: number,
+ *   basePitch: number,
+ *   baseAmplitude: number,
+ *   autoStart: boolean
+ * })
+ * 
+ * Example:
+ *   let ambient = new RandomNonSpatialSound({
+ *     file: ['./audio/birds1.wav', './audio/birds2.wav'],
+ *     minInterval: 2000,
+ *     maxInterval: 8000,
+ *     pitchVariation: 0.2,
+ *     amplitudeVariation: 0.3,
+ *     basePitch: 1.0,
+ *     baseAmplitude: 0.5,
+ *     autoStart: true
+ *   });
+ */
+class RandomNonSpatialSound {
+    constructor(args) {
+        if (!_scene) throw new Error('RandomNonSpatialSound: sounds must be created inside the createScene function, in the "ADD YOUR SOUNDS HERE" section.');
+
+        // Process file parameter
+        const fileArray = Array.isArray(args.file) ? args.file : [args.file];
+        this.files = fileArray.filter(Boolean);
+
+        // Parameters with defaults
+        this.minInterval = Math.max(0, Number(args.minInterval) || 1000);
+        this.maxInterval = Math.max(this.minInterval, Number(args.maxInterval) || 5000);
+        this.pitchVariation = Math.max(0, Number(args.pitchVariation) || 0);
+        this.amplitudeVariation = Math.max(0, Number(args.amplitudeVariation) || 0);
+        this.basePitch = Math.max(0.01, Number(args.basePitch) || 1);
+        this.baseAmplitude = Math.max(0, Number(args.baseAmplitude) || 1);
+        this.autoStart = (typeof args.autoStart === 'undefined' ? true : args.autoStart);
+
+        this.sounds = [];
+        this.timerId = null;
+        this.isRunning = false;
+
+        // Load all sound files
+        this.files.forEach(soundFile => {
+            this.sounds.push(new BABYLON.Sound(soundFile, soundFile, _scene, function () {
+                console.log(soundFile + " ready for random playback");
+            }, { loop: false, autoplay: false, spatialSound: false }));
+        });
+
+        (window._registeredSounds = window._registeredSounds || []).push(this);
+
+        if (this.autoStart) {
+            this.start();
+        }
+    }
+
+    start() {
+        if (this.isRunning) {
+            return;
+        }
+        this.isRunning = true;
+        this._scheduleNext();
+    }
+
+    stop() {
+        this.isRunning = false;
+        if (this.timerId !== null) {
+            clearTimeout(this.timerId);
+            this.timerId = null;
+        }
+    }
+
+    _scheduleNext() {
+        if (!this.isRunning) {
+            return;
+        }
+
+        const waitMs = this._randomRange(this.minInterval, this.maxInterval);
+        this.timerId = setTimeout(() => {
+            if (!this.isRunning || this.sounds.length === 0) {
+                return;
+            }
+
+            const randomSound = this.sounds[Math.floor(Math.random() * this.sounds.length)];
+            const randomPitch = Math.max(0.01, this.basePitch + (this._signedRandom() * this.pitchVariation));
+            const randomAmplitude = this._clamp(this.baseAmplitude + (this._signedRandom() * this.amplitudeVariation), 0, 1);
+
+            randomSound.setPlaybackRate(randomPitch);
+            randomSound.setVolume(randomAmplitude);
+            randomSound.play();
+
+            this._scheduleNext();
+        }, waitMs);
+    }
+
+    _randomRange(min, max) {
+        return min + Math.random() * (max - min);
+    }
+
+    _signedRandom() {
+        return (Math.random() * 2) - 1;
+    }
+
+    _clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+    }
+}
+
 //https://stackoverflow.com/a/72808544
 const colorKeywordToRGB = (colorKeyword) => {
     // CREATE TEMPORARY ELEMENT

@@ -221,6 +221,16 @@
             color: #ffaa00;
         }
 
+        #editPanel .si-badge.random {
+            background: #220033;
+            color: #cc88ff;
+        }
+
+        #editPanel .si-badge.looped {
+            background: #003322;
+            color: #44ffaa;
+        }
+
         #editPanel .si-info {
             flex: 1;
             overflow: hidden;
@@ -336,6 +346,8 @@
             <div class="ep-toggle">
                 <label><input type="radio" name="soundType" value="AreaSound" checked> AreaSound</label>
                 <label><input type="radio" name="soundType" value="OneShotCollisionSound"> OneShotCollision</label>
+                <label><input type="radio" name="soundType" value="RandomNonSpatialSound"> Random</label>
+                <label><input type="radio" name="soundType" value="LoopedSound"> Looped</label>
             </div>
         </div>
         <div class="ep-section">
@@ -364,6 +376,34 @@
                     id="cooldownVal">2000</span></div>
             <input type="range" id="soundCooldown" min="500" max="10000" step="500" value="2000">
         </div>
+        <div id="randomOptions" class="ep-section" style="display:none">
+            <div class="ep-row"><span class="ep-label">Min Interval (ms)</span><span id="minIntervalVal">2000</span>
+            </div>
+            <input type="range" id="soundMinInterval" min="100" max="30000" step="100" value="2000">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Max Interval (ms)</span><span
+                    id="maxIntervalVal">8000</span></div>
+            <input type="range" id="soundMaxInterval" min="100" max="30000" step="100" value="8000">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Base Pitch</span><span
+                    id="basePitchVal">1.0</span></div>
+            <input type="range" id="soundBasePitch" min="0.1" max="2" step="0.1" value="1.0">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Pitch Variation</span><span
+                    id="pitchVariationVal">0.2</span></div>
+            <input type="range" id="soundPitchVariation" min="0" max="1" step="0.05" value="0.2">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Base Amplitude</span><span
+                    id="baseAmplitudeVal">0.5</span></div>
+            <input type="range" id="soundBaseAmplitude" min="0" max="1" step="0.05" value="0.5">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Amplitude Variation</span><span
+                    id="amplitudeVariationVal">0.3</span></div>
+            <input type="range" id="soundAmplitudeVariation" min="0" max="1" step="0.05" value="0.3">
+        </div>
+        <div id="loopedOptions" class="ep-section" style="display:none">
+            <div class="ep-row"><span class="ep-label">Playback Speed</span><span id="loopPlaybackRateVal">1.0</span>
+            </div>
+            <input type="range" id="soundLoopPlaybackRate" min="0.1" max="2" step="0.05" value="1.0">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Crossfade</span><span
+                    id="loopCrossfadeVal">0.5</span></div>
+            <input type="range" id="soundLoopCrossfade" min="0" max="1" step="0.01" value="0.5">
+        </div>
         <div id="positionControls" class="ep-section" style="display:none">
             <span class="ep-label">Position</span>
             <div class="ep-xyz">
@@ -374,8 +414,8 @@
         </div>
         <div class="ep-section" style="text-align:center;padding:6px 10px">
             <button id="placeSoundBtn"
-                style="width:100%;padding:6px;background:#111;border:1px solid #444;color:#ccc;cursor:pointer;font-family:monospace;font-size:11px;">Place
-                Sound at Camera</button>
+                style="width:100%;padding:6px;background:#111;border:1px solid #444;color:#ccc;cursor:pointer;font-family:monospace;font-size:11px;">Add
+                Sound</button>
             <div class="ep-hint" style="margin-top:4px">or press SPACE</div>
         </div>
         <div class="ep-section">
@@ -468,7 +508,13 @@
                 // Force materials to respond to spotlight
                 var sewersToMerge = [];
                 newMeshes.forEach(function (mesh) {
+
                     if (mesh.material) {
+                        // Tag water meshes by their material name
+                        if (mesh.material.name === "WATER_MAT") {
+                            mesh.metadata = { isWater: true };
+                            mesh.isPickable = true;
+                        }
                         // For PBR materials, ensure they respond to lights
                         if (mesh.material.getClassName() === "PBRMaterial") {
                             mesh.material.directIntensity = 1.0;
@@ -476,7 +522,7 @@
                         }
                         mesh.material.maxSimultaneousLights = 4;
                     }
-                    if (mesh.name.indexOf("Sewers_") === 0) {
+                    if (mesh.name.indexOf("Sewers_") === 0 && !(mesh.metadata && mesh.metadata.isWater)) {
                         sewersToMerge.push(mesh);
                     }
                 });
@@ -515,11 +561,12 @@
                 torch.position = scene.activeCamera.position.clone();
                 torch.direction = scene.activeCamera.getForwardRay().direction;
 
+                var downHit = null;
                 if (!isEditMode) {
                     // Single downward raycast for floor height — handles steps up and down
                     var pickPredicate = function (mesh) { return mesh.isPickable; };
                     var downRay = new BABYLON.Ray(universalCamera.position, new BABYLON.Vector3(0, -1, 0), rayLength);
-                    var downHit = scene.pickWithRay(downRay, pickPredicate);
+                    downHit = scene.pickWithRay(downRay, pickPredicate);
                     if (downHit.pickedMesh) {
                         var targetY = downHit.pickedPoint.y + playerHeight;
                         universalCamera.position.y += (targetY - universalCamera.position.y) * 0.15;
@@ -528,6 +575,9 @@
 
                 textInfo.text = isEditMode ? "X:" + (scene.activeCamera.position.x).toFixed(2) + "  Y:" + (scene.activeCamera.position.y).toFixed(2) + "  Z:" + (scene.activeCamera.position.z).toFixed(2) + "  [EDIT MODE]" : "";
                 dirtyInfo.text = (!isEditMode && _soundsDirty) ? "\u26A0  Unsaved sounds  \u2014  press Ctrl+E then copy sounds.js" : "";
+                var isOverWater = downHit && downHit.pickedMesh && downHit.pickedMesh.metadata && downHit.pickedMesh.metadata.isWater === true;
+                var isInWater = isOverWater && (universalCamera.position.y - downHit.pickedPoint.y) <= playerHeight * 1.2;
+                waterInfo.text = isInWater ? "\uD83D\uDCA7 IN WATER" : (isOverWater ? "\uD83D\uDCA7 OVER WATER" : "");
             });
 
 
@@ -558,7 +608,31 @@
             dirtyInfo.shadowBlur = 4;
             stackPanel.addControl(dirtyInfo);
 
+            // TEMPORARY: water detection indicator
+            var waterInfo = new BABYLON.GUI.TextBlock();
+            waterInfo.color = "#00ccff";
+            waterInfo.fontSize = 16;
+            waterInfo.fontWeight = "bold";
+            waterInfo.height = "28px";
+            waterInfo.paddingBottom = "10px";
+            waterInfo.shadowColor = "black";
+            waterInfo.shadowOffsetX = 1;
+            waterInfo.shadowOffsetY = 1;
+            waterInfo.shadowBlur = 4;
+            stackPanel.addControl(waterInfo);
+
             initSounds();
+
+            // Temporary: press I to toggle the Babylon Inspector for mesh name lookup
+            window.addEventListener("keydown", function (e) {
+                if (e.key === "i" || e.key === "I") {
+                    if (scene.debugLayer.isVisible()) {
+                        scene.debugLayer.hide();
+                    } else {
+                        scene.debugLayer.show({ embedMode: true });
+                    }
+                }
+            });
 
             return scene;
         };
@@ -716,33 +790,55 @@
                         (window._registeredSounds || []).forEach(function (rs) {
                             if (placedSounds.some(function (ps) { return ps._source === rs; })) return;
                             var isArea = rs instanceof AreaSound;
-                            var mesh = isArea ? rs.sphere : rs.box;
-                            var pos = mesh ? mesh.position : rs.position;
+                            var isRandom = rs instanceof RandomNonSpatialSound;
+                            var isLooped = rs instanceof LoopedSound;
+                            var isOneShot = rs instanceof OneShotCollisionSound;
                             var index = placedSounds.length;
                             var config = {
                                 _source: rs,
-                                type: isArea ? 'AreaSound' : 'OneShotCollisionSound',
-                                file: isArea
-                                    ? rs.sound.name
-                                    : (rs.sounds.length ? rs.sounds.map(function (s) { return s.name; }).join(', ') : rs.sound.name),
-                                x: parseFloat(pos.x.toFixed(2)),
-                                y: parseFloat(pos.y.toFixed(2)),
-                                z: parseFloat(pos.z.toFixed(2)),
-                                volume: rs.volume,
-                                rolloff: isArea ? rs.rolloff : undefined,
-                                minDistance: isArea ? rs.minDistance : undefined,
-                                w: !isArea ? rs.w : undefined,
-                                timeBetweenPlays: !isArea ? rs.timeBetweenPlays : undefined
+                                type: isArea ? 'AreaSound' : (isRandom ? 'RandomNonSpatialSound' : (isLooped ? 'LoopedSound' : 'OneShotCollisionSound')),
+                                volume: rs.volume || 0.5
                             };
-                            var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
-                            ghostMat.wireframe = true;
-                            ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
-                            config.ghostMesh = isArea
-                                ? BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene)
-                                : BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
-                            config.ghostMesh.material = ghostMat;
-                            config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
-                            updateGhostMesh(config);
+
+                            if (isRandom) {
+                                config.file = rs.files.join(', ');
+                                config.minInterval = rs.minInterval;
+                                config.maxInterval = rs.maxInterval;
+                                config.basePitch = rs.basePitch;
+                                config.pitchVariation = rs.pitchVariation;
+                                config.baseAmplitude = rs.baseAmplitude;
+                                config.amplitudeVariation = rs.amplitudeVariation;
+                                config.ghostMesh = null;
+                            } else if (isLooped) {
+                                config.file = rs.file;
+                                config.playbackRate = rs.playbackRate;
+                                config.crossfade = rs.crossfade;
+                                config.ghostMesh = null;
+                            } else {
+                                var mesh = isArea ? rs.sphere : rs.box;
+                                var pos = mesh ? mesh.position : rs.position;
+                                config.file = isArea
+                                    ? rs.sound.name
+                                    : (rs.sounds.length ? rs.sounds.map(function (s) { return s.name; }).join(', ') : rs.sound.name);
+                                config.x = parseFloat(pos.x.toFixed(2));
+                                config.y = parseFloat(pos.y.toFixed(2));
+                                config.z = parseFloat(pos.z.toFixed(2));
+                                config.rolloff = isArea ? rs.rolloff : undefined;
+                                config.minDistance = isArea ? rs.minDistance : undefined;
+                                config.w = isOneShot ? rs.w : undefined;
+                                config.timeBetweenPlays = isOneShot ? rs.timeBetweenPlays : undefined;
+
+                                var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
+                                ghostMat.wireframe = true;
+                                ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
+                                config.ghostMesh = isArea
+                                    ? BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene)
+                                    : BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
+                                config.ghostMesh.material = ghostMat;
+                                config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
+                                updateGhostMesh(config);
+                            }
+
                             placedSounds.push(config);
                         });
                         // Restore from localStorage if nothing is placed yet
@@ -754,16 +850,24 @@
                                     restored.forEach(function (data) {
                                         var idx = placedSounds.length;
                                         var isArea = data.type === 'AreaSound';
-                                        var ghostMat = new BABYLON.StandardMaterial('ghostMat_r' + idx, scene);
-                                        ghostMat.wireframe = true;
-                                        ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
-                                        var mesh = isArea
-                                            ? BABYLON.MeshBuilder.CreateSphere('ghost_r' + idx, { diameter: 1 }, scene)
-                                            : BABYLON.MeshBuilder.CreateBox('ghost_r' + idx, { size: 1 }, scene);
-                                        mesh.material = ghostMat;
-                                        mesh.position = new BABYLON.Vector3(data.x, data.y, data.z);
-                                        data.ghostMesh = mesh;
-                                        updateGhostMesh(data);
+                                        var isRandom = data.type === 'RandomNonSpatialSound';
+                                        var isLooped = data.type === 'LoopedSound';
+
+                                        if (!isRandom && !isLooped) {
+                                            var ghostMat = new BABYLON.StandardMaterial('ghostMat_r' + idx, scene);
+                                            ghostMat.wireframe = true;
+                                            ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
+                                            var mesh = isArea
+                                                ? BABYLON.MeshBuilder.CreateSphere('ghost_r' + idx, { diameter: 1 }, scene)
+                                                : BABYLON.MeshBuilder.CreateBox('ghost_r' + idx, { size: 1 }, scene);
+                                            mesh.material = ghostMat;
+                                            mesh.position = new BABYLON.Vector3(data.x, data.y, data.z);
+                                            data.ghostMesh = mesh;
+                                            updateGhostMesh(data);
+                                        } else {
+                                            data.ghostMesh = null;
+                                        }
+
                                         createLiveSound(data);
                                         placedSounds.push(data);
                                     });
@@ -884,6 +988,77 @@
             document.getElementById('cooldownVal').textContent = this.value;
             if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].timeBetweenPlays = parseInt(this.value); generateCode(); }
         });
+
+        // Random sound controls
+        document.getElementById('soundMinInterval').addEventListener('input', function () {
+            document.getElementById('minIntervalVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].minInterval = parseInt(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.minInterval = parseInt(this.value);
+                generateCode();
+            }
+        });
+        document.getElementById('soundMaxInterval').addEventListener('input', function () {
+            document.getElementById('maxIntervalVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].maxInterval = parseInt(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.maxInterval = parseInt(this.value);
+                generateCode();
+            }
+        });
+        document.getElementById('soundBasePitch').addEventListener('input', function () {
+            document.getElementById('basePitchVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].basePitch = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.basePitch = parseFloat(this.value);
+                generateCode();
+            }
+        });
+        document.getElementById('soundPitchVariation').addEventListener('input', function () {
+            document.getElementById('pitchVariationVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].pitchVariation = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.pitchVariation = parseFloat(this.value);
+                generateCode();
+            }
+        });
+        document.getElementById('soundBaseAmplitude').addEventListener('input', function () {
+            document.getElementById('baseAmplitudeVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].baseAmplitude = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.baseAmplitude = parseFloat(this.value);
+                generateCode();
+            }
+        });
+        document.getElementById('soundAmplitudeVariation').addEventListener('input', function () {
+            document.getElementById('amplitudeVariationVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].amplitudeVariation = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.amplitudeVariation = parseFloat(this.value);
+                generateCode();
+            }
+        });
+
+        // Looped sound controls
+        document.getElementById('soundLoopPlaybackRate').addEventListener('input', function () {
+            document.getElementById('loopPlaybackRateVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].playbackRate = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source && placedSounds[selectedSoundIndex]._source.setPlaybackRate) {
+                    placedSounds[selectedSoundIndex]._source.setPlaybackRate(parseFloat(this.value));
+                }
+                generateCode();
+            }
+        });
+        document.getElementById('soundLoopCrossfade').addEventListener('input', function () {
+            document.getElementById('loopCrossfadeVal').textContent = this.value;
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].crossfade = parseFloat(this.value);
+                if (placedSounds[selectedSoundIndex]._source) placedSounds[selectedSoundIndex]._source.crossfade = parseFloat(this.value);
+                generateCode();
+            }
+        });
+
         document.getElementById('browseFileBtn').addEventListener('click', function () {
             document.getElementById('soundFilePicker').click();
         });
@@ -957,17 +1132,23 @@
             });
         });
 
-        // Toggle area/oneshot options
+        // Toggle area/oneshot/random/looped options
         document.querySelectorAll('input[name="soundType"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
                 var isArea = this.value === 'AreaSound';
+                var isOneShot = this.value === 'OneShotCollisionSound';
+                var isRandom = this.value === 'RandomNonSpatialSound';
+                var isLooped = this.value === 'LoopedSound';
+                var isNonSpatial = isRandom || isLooped;
                 document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
-                document.getElementById('oneShotOptions').style.display = isArea ? 'none' : 'block';
+                document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
+                document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
+                document.getElementById('loopedOptions').style.display = isLooped ? 'block' : 'none';
+                document.getElementById('positionControls').style.display = isNonSpatial ? 'none' : (selectedSoundIndex !== -1 ? 'block' : 'none');
             });
         });
 
         function placeSoundAtCamera() {
-            var pos = scene.activeCamera.position;
             var type = document.querySelector('input[name="soundType"]:checked').value;
             var file = document.getElementById('soundFile').value.trim() || './assets/sound.wav';
             var volume = parseFloat(document.getElementById('soundVolume').value);
@@ -976,11 +1157,17 @@
             var config = {
                 type: type,
                 file: file,
-                x: parseFloat(pos.x.toFixed(2)),
-                y: parseFloat(pos.y.toFixed(2)),
-                z: parseFloat(pos.z.toFixed(2)),
                 volume: volume
             };
+
+            // Non-spatial sounds don't have position
+            var isNonSpatial = type === 'RandomNonSpatialSound' || type === 'LoopedSound';
+            if (!isNonSpatial) {
+                var pos = scene.activeCamera.position;
+                config.x = parseFloat(pos.x.toFixed(2));
+                config.y = parseFloat(pos.y.toFixed(2));
+                config.z = parseFloat(pos.z.toFixed(2));
+            }
 
             var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
             ghostMat.wireframe = true;
@@ -991,17 +1178,33 @@
                 // Unit sphere — scaled via updateGhostMesh
                 config.ghostMesh = BABYLON.MeshBuilder.CreateSphere('ghost_' + index, { diameter: 1 }, scene);
                 ghostMat.emissiveColor = new BABYLON.Color3(0, 0.8, 0.8);
-            } else {
+            } else if (type === 'OneShotCollisionSound') {
                 config.w = parseFloat(document.getElementById('soundWidth').value);
                 config.timeBetweenPlays = parseInt(document.getElementById('soundCooldown').value);
                 // Unit box — scaled via updateGhostMesh
                 config.ghostMesh = BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
                 ghostMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0);
+            } else if (type === 'RandomNonSpatialSound') {
+                config.minInterval = parseInt(document.getElementById('soundMinInterval').value);
+                config.maxInterval = parseInt(document.getElementById('soundMaxInterval').value);
+                config.basePitch = parseFloat(document.getElementById('soundBasePitch').value);
+                config.pitchVariation = parseFloat(document.getElementById('soundPitchVariation').value);
+                config.baseAmplitude = parseFloat(document.getElementById('soundBaseAmplitude').value);
+                config.amplitudeVariation = parseFloat(document.getElementById('soundAmplitudeVariation').value);
+                // No ghost mesh for non-spatial sounds
+                config.ghostMesh = null;
+            } else if (type === 'LoopedSound') {
+                config.playbackRate = parseFloat(document.getElementById('soundLoopPlaybackRate').value);
+                config.crossfade = parseFloat(document.getElementById('soundLoopCrossfade').value);
+                // No ghost mesh for non-spatial sounds
+                config.ghostMesh = null;
             }
 
-            config.ghostMesh.material = ghostMat;
-            config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
-            updateGhostMesh(config);
+            if (config.ghostMesh) {
+                config.ghostMesh.material = ghostMat;
+                config.ghostMesh.position = new BABYLON.Vector3(config.x, config.y, config.z);
+                updateGhostMesh(config);
+            }
 
             createLiveSound(config);
             placedSounds.push(config);
@@ -1033,7 +1236,7 @@
                         minDistance: config.minDistance !== undefined ? config.minDistance : 1,
                         visible: false
                     });
-                } else {
+                } else if (config.type === 'OneShotCollisionSound') {
                     config._source = new OneShotCollisionSound({
                         file: files,
                         x: config.x, y: config.y, z: config.z,
@@ -1043,9 +1246,28 @@
                         secondsBeforeNextPlay: ((config.timeBetweenPlays || 2000) / 1000),
                         visible: false
                     });
+                } else if (config.type === 'RandomNonSpatialSound') {
+                    config._source = new RandomNonSpatialSound({
+                        file: files,
+                        minInterval: config.minInterval !== undefined ? config.minInterval : 2000,
+                        maxInterval: config.maxInterval !== undefined ? config.maxInterval : 8000,
+                        basePitch: config.basePitch !== undefined ? config.basePitch : 1.0,
+                        pitchVariation: config.pitchVariation !== undefined ? config.pitchVariation : 0.2,
+                        baseAmplitude: config.baseAmplitude !== undefined ? config.baseAmplitude : 0.5,
+                        amplitudeVariation: config.amplitudeVariation !== undefined ? config.amplitudeVariation : 0.3,
+                        autoStart: true
+                    });
+                } else if (config.type === 'LoopedSound') {
+                    config._source = new LoopedSound({
+                        file: files[0],
+                        volume: config.volume !== undefined ? config.volume : 0.5,
+                        playbackRate: config.playbackRate !== undefined ? config.playbackRate : 1.0,
+                        crossfade: config.crossfade !== undefined ? config.crossfade : 0.5,
+                        autoStart: true
+                    });
                 }
                 if (config._source) {
-                    var m = config.type === 'AreaSound' ? config._source.sphere : config._source.box;
+                    var m = config.type === 'AreaSound' ? config._source.sphere : (config.type === 'OneShotCollisionSound' ? config._source.box : null);
                     if (m) { m.isPickable = false; m.checkCollisions = false; }
                 }
             } catch (e) {
@@ -1063,6 +1285,13 @@
                 if (src.sounds) src.sounds.forEach(function (s) { try { s.stop(); s.dispose(); } catch (e) { } });
                 if (src.sound) { try { src.sound.stop(); src.sound.dispose(); } catch (e) { } }
                 if (src.box) src.box.dispose();
+            } else if (src instanceof RandomNonSpatialSound) {
+                src.stop();
+                if (src.sounds) src.sounds.forEach(function (s) { try { s.stop(); s.dispose(); } catch (e) { } });
+            } else if (src instanceof LoopedSound) {
+                src.stop();
+                if (src.currentSound) { try { src.currentSound.stop(); src.currentSound.dispose(); } catch (e) { } }
+                if (src.nextSound) { try { src.nextSound.stop(); src.nextSound.dispose(); } catch (e) { } }
             }
             var idx = (window._registeredSounds || []).indexOf(src);
             if (idx !== -1) window._registeredSounds.splice(idx, 1);
@@ -1113,8 +1342,10 @@
                 s.ghostMesh.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
             }
 
-            // Teleport camera to look at the sound
-            arcRotateCamera.target = new BABYLON.Vector3(s.x, s.y, s.z);
+            // Teleport camera to look at the sound (only for spatial sounds)
+            if (s.type !== 'RandomNonSpatialSound' && s.type !== 'LoopedSound') {
+                arcRotateCamera.target = new BABYLON.Vector3(s.x, s.y, s.z);
+            }
 
             // Populate controls
             document.querySelector('input[name="soundType"][value="' + s.type + '"]').checked = true;
@@ -1123,29 +1354,56 @@
             document.getElementById('volumeVal').textContent = s.volume;
 
             var isArea = s.type === 'AreaSound';
+            var isOneShot = s.type === 'OneShotCollisionSound';
+            var isRandom = s.type === 'RandomNonSpatialSound';
+            var isLooped = s.type === 'LoopedSound';
+
             document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
-            document.getElementById('oneShotOptions').style.display = isArea ? 'none' : 'block';
+            document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
+            document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
+            document.getElementById('loopedOptions').style.display = isLooped ? 'block' : 'none';
 
             if (isArea) {
                 document.getElementById('soundRolloff').value = s.rolloff;
                 document.getElementById('rolloffVal').textContent = s.rolloff;
                 document.getElementById('soundMinDist').value = s.minDistance !== undefined ? s.minDistance : 1;
                 document.getElementById('minDistVal').textContent = s.minDistance !== undefined ? s.minDistance : 1;
-            } else {
+            } else if (isOneShot) {
                 document.getElementById('soundWidth').value = s.w;
                 document.getElementById('widthVal').textContent = s.w;
                 document.getElementById('soundCooldown').value = s.timeBetweenPlays;
                 document.getElementById('cooldownVal').textContent = s.timeBetweenPlays;
+            } else if (isRandom) {
+                document.getElementById('soundMinInterval').value = s.minInterval !== undefined ? s.minInterval : 2000;
+                document.getElementById('minIntervalVal').textContent = s.minInterval !== undefined ? s.minInterval : 2000;
+                document.getElementById('soundMaxInterval').value = s.maxInterval !== undefined ? s.maxInterval : 8000;
+                document.getElementById('maxIntervalVal').textContent = s.maxInterval !== undefined ? s.maxInterval : 8000;
+                document.getElementById('soundBasePitch').value = s.basePitch !== undefined ? s.basePitch : 1.0;
+                document.getElementById('basePitchVal').textContent = s.basePitch !== undefined ? s.basePitch : 1.0;
+                document.getElementById('soundPitchVariation').value = s.pitchVariation !== undefined ? s.pitchVariation : 0.2;
+                document.getElementById('pitchVariationVal').textContent = s.pitchVariation !== undefined ? s.pitchVariation : 0.2;
+                document.getElementById('soundBaseAmplitude').value = s.baseAmplitude !== undefined ? s.baseAmplitude : 0.5;
+                document.getElementById('baseAmplitudeVal').textContent = s.baseAmplitude !== undefined ? s.baseAmplitude : 0.5;
+                document.getElementById('soundAmplitudeVariation').value = s.amplitudeVariation !== undefined ? s.amplitudeVariation : 0.3;
+                document.getElementById('amplitudeVariationVal').textContent = s.amplitudeVariation !== undefined ? s.amplitudeVariation : 0.3;
+            } else if (isLooped) {
+                document.getElementById('soundLoopPlaybackRate').value = s.playbackRate !== undefined ? s.playbackRate : 1.0;
+                document.getElementById('loopPlaybackRateVal').textContent = s.playbackRate !== undefined ? s.playbackRate : 1.0;
+                document.getElementById('soundLoopCrossfade').value = s.crossfade !== undefined ? s.crossfade : 0.5;
+                document.getElementById('loopCrossfadeVal').textContent = s.crossfade !== undefined ? s.crossfade : 0.5;
             }
 
-            // Position controls
-            posControls.style.display = 'block';
-            document.getElementById('posX').value = s.x;
-            document.getElementById('posY').value = s.y;
-            document.getElementById('posZ').value = s.z;
+            // Position controls only for spatial sounds
+            posControls.style.display = (isRandom || isLooped) ? 'none' : 'block';
+            if (!isRandom && !isLooped) {
+                document.getElementById('posX').value = s.x;
+                document.getElementById('posY').value = s.y;
+                document.getElementById('posZ').value = s.z;
+            }
 
             bar.style.display = 'flex';
-            bar.innerHTML = '<span>Editing: ' + (isArea ? 'AreaSound' : 'OneShotCollision') + ' #' + (i + 1) + '</span>' +
+            var typeName = isArea ? 'AreaSound' : (isOneShot ? 'OneShotCollision' : (isRandom ? 'Random' : 'Looped'));
+            bar.innerHTML = '<span>Editing: ' + typeName + ' #' + (i + 1) + '</span>' +
                 '<button id="deselectBtn">✕ deselect</button>';
             document.getElementById('deselectBtn').addEventListener('click', function () { selectSound(-1); });
 
@@ -1160,13 +1418,18 @@
                 var item = document.createElement('div');
                 item.className = 'sound-item' + (i === selectedSoundIndex ? ' selected' : '');
                 var isArea = s.type === 'AreaSound';
+                var isRandom = s.type === 'RandomNonSpatialSound';
+                var isLooped = s.type === 'LoopedSound';
                 var fileName = s.file.split('/').pop().split(',')[0];
+                var badgeClass = isArea ? 'area' : (isRandom ? 'random' : (isLooped ? 'looped' : 'oneshot'));
+                var badgeText = isArea ? 'AREA' : (isRandom ? 'RAND' : (isLooped ? 'LOOP' : 'SHOT'));
+                var posText = (isRandom || isLooped) ? '(non-spatial)' : '(' + s.x + ', ' + s.y + ', ' + s.z + ')';
                 item.innerHTML =
-                    '<span class="si-badge ' + (isArea ? 'area' : 'oneshot') + '">' +
-                    (isArea ? 'AREA' : 'SHOT') +
+                    '<span class="si-badge ' + badgeClass + '">' +
+                    badgeText +
                     '</span>' +
                     '<span class="si-info" title="' + s.file + '">' +
-                    fileName + ' (' + s.x + ', ' + s.y + ', ' + s.z + ')' +
+                    fileName + ' ' + posText +
                     '</span>' +
                     '<button class="si-del" data-index="' + i + '">×</button>';
                 item.addEventListener('click', function (e) {
@@ -1192,6 +1455,8 @@
         function generateCode() {
             var areaSounds = placedSounds.filter(function (s) { return s.type === 'AreaSound'; });
             var oneShotSounds = placedSounds.filter(function (s) { return s.type === 'OneShotCollisionSound'; });
+            var randomSounds = placedSounds.filter(function (s) { return s.type === 'RandomNonSpatialSound'; });
+            var loopedSounds = placedSounds.filter(function (s) { return s.type === 'LoopedSound'; });
             var inner = [];
 
             if (areaSounds.length > 0) {
@@ -1220,6 +1485,33 @@
                 });
             }
 
+            if (randomSounds.length > 0) {
+                inner.push('    let randomSounds = [];');
+                randomSounds.forEach(function (s) {
+                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
+                    var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
+                    inner.push('    randomSounds.push(new RandomNonSpatialSound({ file: ' + fileStr +
+                        ', minInterval: ' + (s.minInterval !== undefined ? s.minInterval : 2000) +
+                        ', maxInterval: ' + (s.maxInterval !== undefined ? s.maxInterval : 8000) +
+                        ', basePitch: ' + (s.basePitch !== undefined ? s.basePitch : 1.0) +
+                        ', pitchVariation: ' + (s.pitchVariation !== undefined ? s.pitchVariation : 0.2) +
+                        ', baseAmplitude: ' + (s.baseAmplitude !== undefined ? s.baseAmplitude : 0.5) +
+                        ', amplitudeVariation: ' + (s.amplitudeVariation !== undefined ? s.amplitudeVariation : 0.3) +
+                        ', autoStart: true }));');
+                });
+            }
+
+            if (loopedSounds.length > 0) {
+                inner.push('    let loopedSounds = [];');
+                loopedSounds.forEach(function (s) {
+                    inner.push('    loopedSounds.push(new LoopedSound({ file: "' + s.file +
+                        '", volume: ' + (s.volume !== undefined ? s.volume : 1.0) +
+                        ', playbackRate: ' + (s.playbackRate !== undefined ? s.playbackRate : 1.0) +
+                        ', crossfade: ' + (s.crossfade !== undefined ? s.crossfade : 0) +
+                        ', autoStart: true }));');
+                });
+            }
+
             var lines = [
                 '// ============================================================',
                 '// SOUNDS — this is the only file you need to edit',
@@ -1238,7 +1530,10 @@
                 var snapshot = placedSounds.map(function (s) {
                     return {
                         type: s.type, file: s.file, x: s.x, y: s.y, z: s.z,
-                        volume: s.volume, rolloff: s.rolloff, minDistance: s.minDistance, w: s.w, timeBetweenPlays: s.timeBetweenPlays
+                        volume: s.volume, rolloff: s.rolloff, minDistance: s.minDistance, w: s.w, timeBetweenPlays: s.timeBetweenPlays,
+                        minInterval: s.minInterval, maxInterval: s.maxInterval, basePitch: s.basePitch,
+                        pitchVariation: s.pitchVariation, baseAmplitude: s.baseAmplitude, amplitudeVariation: s.amplitudeVariation,
+                        playbackRate: s.playbackRate, crossfade: s.crossfade
                     };
                 });
                 localStorage.setItem('ks_sounds', JSON.stringify(snapshot));
