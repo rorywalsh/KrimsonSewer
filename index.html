@@ -1058,12 +1058,10 @@
             engine.resize();
         });
 
-        // Warn about unsaved sound changes
+        // Always warn on page close
         window.addEventListener('beforeunload', function (e) {
-            if (_soundsDirty) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
+            e.preventDefault();
+            e.returnValue = '';
         });
 
         // --- Sound Editor Panel ---
