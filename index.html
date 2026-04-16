@@ -92,7 +92,10 @@
         }
 
         #editPanel .ep-toggle label {
-            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
             cursor: pointer;
             color: #ccc;
         }
@@ -430,7 +433,9 @@
             <input type="range" id="soundWidth" min="0.5" max="20" step="0.5" value="3">
             <div class="ep-row" style="margin-top:6px"><span class="ep-label">Cooldown (ms)</span><span
                     id="cooldownVal">2000</span></div>
-            <input type="range" id="soundCooldown" min="500" max="10000" step="500" value="2000">
+            <input type="range" id="soundCooldown" min="-1" max="10000" step="500" value="2000">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Area Rolloff</span><span id="oneShotRolloffVal">off</span></div>
+            <input type="range" id="oneShotRolloff" min="0" max="10" step="0.5" value="0">
         </div>
         <div id="randomOptions" class="ep-section" style="display:none">
             <div class="ep-row"><span class="ep-label">Min Interval (ms)</span><span id="minIntervalVal">2000</span>
@@ -721,7 +726,7 @@
                     if (scene.debugLayer.isVisible()) {
                         scene.debugLayer.hide();
                     } else {
-                        scene.debugLayer.show({ embedMode: true });
+                        scene.debugLayer.show({ embedMode: true, overlay: false });
                     }
                 }
             });
@@ -919,6 +924,7 @@
                                 config.minDistance = isArea ? rs.minDistance : undefined;
                                 config.w = isOneShot ? rs.w : undefined;
                                 config.timeBetweenPlays = isOneShot ? rs.timeBetweenPlays : undefined;
+                                config.rolloff = isOneShot ? (rs.rolloff || 0) : undefined;
 
                                 var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
                                 ghostMat.wireframe = true;
@@ -1111,8 +1117,22 @@
             }
         });
         document.getElementById('soundCooldown').addEventListener('input', function () {
-            document.getElementById('cooldownVal').textContent = this.value;
-            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].timeBetweenPlays = parseInt(this.value); generateCode(); }
+            var val = parseInt(this.value);
+            document.getElementById('cooldownVal').textContent = val === -1 ? 'once' : val;
+            if (selectedSoundIndex !== -1) { placedSounds[selectedSoundIndex].timeBetweenPlays = val; generateCode(); }
+        });
+        document.getElementById('oneShotRolloff').addEventListener('input', function () {
+            var val = parseFloat(this.value);
+            document.getElementById('oneShotRolloffVal').textContent = val === 0 ? 'off' : val;
+            if (selectedSoundIndex !== -1) {
+                var s = placedSounds[selectedSoundIndex];
+                s.rolloff = val;
+                if (s._source) {
+                    s._source.rolloff = val;
+                    s._source._areaMaxDist = val > 0 ? ((8 / val) * 3 / 2) : Infinity;
+                }
+                generateCode();
+            }
         });
 
         // Random sound controls
@@ -1307,6 +1327,7 @@
             } else if (type === 'OneShotCollisionSound') {
                 config.w = parseFloat(document.getElementById('soundWidth').value);
                 config.timeBetweenPlays = parseInt(document.getElementById('soundCooldown').value);
+                config.rolloff = parseFloat(document.getElementById('oneShotRolloff').value);
                 // Unit box — scaled via updateGhostMesh
                 config.ghostMesh = BABYLON.MeshBuilder.CreateBox('ghost_' + index, { size: 1 }, scene);
                 ghostMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0);
@@ -1405,6 +1426,7 @@
                         w: config.w !== undefined ? config.w : 3,
                         timeBetweenPlays: config.timeBetweenPlays || 2000,
                         secondsBeforeNextPlay: ((config.timeBetweenPlays || 2000) / 1000),
+                        rolloff: config.rolloff !== undefined ? config.rolloff : 0,
                         visible: false
                     });
                 } else if (config.type === 'RandomNonSpatialSound') {
@@ -1533,7 +1555,10 @@
                 document.getElementById('soundWidth').value = s.w;
                 document.getElementById('widthVal').textContent = s.w;
                 document.getElementById('soundCooldown').value = s.timeBetweenPlays;
-                document.getElementById('cooldownVal').textContent = s.timeBetweenPlays;
+                document.getElementById('cooldownVal').textContent = s.timeBetweenPlays === -1 ? 'once' : s.timeBetweenPlays;
+                var osRolloff = s.rolloff !== undefined ? s.rolloff : 0;
+                document.getElementById('oneShotRolloff').value = osRolloff;
+                document.getElementById('oneShotRolloffVal').textContent = osRolloff === 0 ? 'off' : osRolloff;
             } else if (isRandom) {
                 document.getElementById('soundMinInterval').value = s.minInterval !== undefined ? s.minInterval : 2000;
                 document.getElementById('minIntervalVal').textContent = s.minInterval !== undefined ? s.minInterval : 2000;
@@ -1638,10 +1663,12 @@
                 oneShotSounds.forEach(function (s) {
                     var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
+                    var osRolloffStr = (s.rolloff && s.rolloff > 0) ? ', rolloff: ' + s.rolloff : '';
                     inner.push('    triggerSounds.push(new OneShotCollisionSound({ file: ' + fileStr +
                         ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
                         ', volume: ' + s.volume + ', w: ' + s.w +
                         ', timeBetweenPlays: ' + s.timeBetweenPlays +
+                        osRolloffStr +
                         ', visible: false }));');
                 });
             }

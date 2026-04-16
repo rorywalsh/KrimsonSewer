@@ -32,6 +32,7 @@ class OneShotCollisionSound {
         this.name = (typeof args.name === 'undefined' ? args.file[0] : args.name);
         this.volume = (typeof args.volume === 'undefined' ? 0.5 : args.volume);
         this.timeBetweenPlays = (typeof args.timeBetweenPlays === 'undefined' ? 2000 : args.secondsBeforeNextPlay * 1000);
+        this.rolloff = (typeof args.rolloff === 'undefined' ? 0 : args.rolloff);
         this.sounds = [];
         this.position = new BABYLON.Vector3(args.x, this.y, args.z);
         this.box = BABYLON.Mesh.CreateBox(this.name, 3, _scene);
@@ -47,6 +48,9 @@ class OneShotCollisionSound {
 
         this.box.scaling = new BABYLON.Vector3(this.w, 1, this.w);
         this.box.position = new BABYLON.Vector3(args.x, this.y, args.z);
+        // Area attenuation: minDistance = box half-extent, maxDistance derived from rolloff
+        this._areaMinDist = this.w * 1.5;
+        this._areaMaxDist = this.rolloff > 0 ? ((8 / this.rolloff) * 3 / 2) : Infinity;
         // Create and load the sound async
         this.sound = null;
         console.log(args.file);
@@ -172,7 +176,23 @@ function startSoundCollisions(camera) {
             if (inside) {
                 s.play();
             } else {
-                s.canPlay = true;
+                if (s.timeBetweenPlays !== -1) s.canPlay = true;
+            }
+            // Area attenuation: continuously adjust volume based on distance from box centre
+            if (s.rolloff > 0) {
+                var dist = BABYLON.Vector3.Distance(cam.position, s.position);
+                var gain;
+                if (dist >= s._areaMaxDist) {
+                    gain = 0;
+                } else if (dist <= s._areaMinDist) {
+                    gain = 1;
+                } else {
+                    var t = (dist - s._areaMinDist) / (s._areaMaxDist - s._areaMinDist);
+                    gain = Math.pow(1 - t, s.rolloff);
+                }
+                var vol = s.volume * gain;
+                var allSounds = s.sounds.length > 0 ? s.sounds : (s.sound ? [s.sound] : []);
+                allSounds.forEach(function (snd) { snd.setVolume(vol); });
             }
         });
     });
