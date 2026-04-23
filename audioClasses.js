@@ -199,34 +199,41 @@ function startSoundCollisions(camera) {
 }
 
 /* 
- * LoopedSound - continuously loops a sound with optional crossfade
+ * StaticSound - plays a sound, optionally looping, with crossfade and time offset support
  * 
- * LoopedSound({
+ * StaticSound({
  *   file: 'string',
  *   volume: number (0-1),
  *   playbackRate: number (pitch, default 1.0),
- *   crossfade: number (seconds, 0 = no crossfade),
+ *   loop: boolean (default false — set true to loop continuously),
+ *   crossfade: number (0-1 fraction, only used when loop is true, 0 = hard loop),
+ *   timeOffset: number (seconds into the file at which playback begins, default 0),
  *   autoStart: boolean
  * })
  * 
  * Example:
- *   let drone = new LoopedSound({
+ *   let drone = new StaticSound({
  *     file: './audio/drone.wav',
  *     volume: 0.5,
  *     playbackRate: 1.0,
+ *     loop: true,
  *     crossfade: 1.0,
+ *     timeOffset: 2.5,
  *     autoStart: true
  *   });
  */
-class LoopedSound {
+class StaticSound {
     constructor(args) {
-        if (!_scene) throw new Error('LoopedSound: must be created inside the createScene function.');
+        if (!_scene) throw new Error('StaticSound: must be created inside the createScene function.');
 
         this.file = args.file;
         this.volume = (typeof args.volume === 'number') ? Math.max(0, Math.min(1, args.volume)) : 0.5;
         this.playbackRate = Math.max(0.01, (typeof args.playbackRate === 'number') ? args.playbackRate : 1);
-        // crossfade: 0 = no crossfade, 1 = fade in/out for half the clip length each
+        this.loop = (typeof args.loop === 'boolean') ? args.loop : false;
+        // crossfade: 0 = no crossfade, 1 = fade in/out for half the clip length each (only when loop is true)
         this.crossfade = (typeof args.crossfade === 'number') ? Math.max(0, Math.min(1, args.crossfade)) : 0;
+        // timeOffset: seconds into the audio file at which playback begins
+        this.timeOffset = (typeof args.timeOffset === 'number') ? Math.max(0, args.timeOffset) : 0;
 
         this._ctx = null;
         this._masterGain = null;
@@ -245,7 +252,7 @@ class LoopedSound {
         this._ctx = (audioEngine && (audioEngine.audioContext || audioEngine._audioContext))
             || new (window.AudioContext || window.webkitAudioContext)();
 
-        console.log('[LoopedSound] AudioContext state on load:', this._ctx.state, '| file:', this.file);
+        console.log('[StaticSound] AudioContext state on load:', this._ctx.state, '| file:', this.file);
 
         this._masterGain = this._ctx.createGain();
         this._masterGain.gain.value = this.volume;
@@ -254,22 +261,22 @@ class LoopedSound {
         fetch(this.file)
             .then(function (r) { return r.arrayBuffer(); })
             .then(function (ab) {
-                console.log('[LoopedSound] Decoding audio data...');
+                console.log('[StaticSound] Decoding audio data...');
                 return self._ctx.decodeAudioData(ab);
             })
             .then(function (buffer) {
                 self._buffer = buffer;
-                console.log('[LoopedSound] Buffer decoded. Duration:', buffer.duration.toFixed(3), 's | playbackRate:', self.playbackRate, '| crossfade:', self.crossfade);
+                console.log('[StaticSound] Buffer decoded. Duration:', buffer.duration.toFixed(3), 's | playbackRate:', self.playbackRate, '| loop:', self.loop, '| crossfade:', self.crossfade, '| timeOffset:', self.timeOffset);
                 self._startWhenUnlocked();
             })
-            .catch(function (e) { console.warn('[LoopedSound] Failed to load', self.file, e); });
+            .catch(function (e) { console.warn('[StaticSound] Failed to load', self.file, e); });
     }
 
     _startWhenUnlocked() {
         var self = this;
         var ctx = this._ctx;
 
-        console.log('[LoopedSound] _startWhenUnlocked, ctx.state:', ctx.state);
+        console.log('[StaticSound] _startWhenUnlocked, ctx.state:', ctx.state);
 
         if (ctx.state === 'running') {
             this._play();
@@ -278,16 +285,16 @@ class LoopedSound {
 
         var audioEngine = BABYLON.Engine.audioEngine;
         if (audioEngine && audioEngine.onAudioUnlockedObservable) {
-            console.log('[LoopedSound] Waiting for BabylonJS audio unlock...');
+            console.log('[StaticSound] Waiting for BabylonJS audio unlock...');
             audioEngine.onAudioUnlockedObservable.addOnce(function () {
-                console.log('[LoopedSound] Audio unlocked via BabylonJS, ctx.state:', ctx.state);
+                console.log('[StaticSound] Audio unlocked via BabylonJS, ctx.state:', ctx.state);
                 if (!self._isRunning) { self._play(); }
             });
         } else {
-            console.log('[LoopedSound] No onAudioUnlockedObservable, polling...');
+            console.log('[StaticSound] No onAudioUnlockedObservable, polling...');
             (function poll() {
                 ctx.resume().then(function () {
-                    console.log('[LoopedSound] poll: ctx.state after resume:', ctx.state);
+                    console.log('[StaticSound] poll: ctx.state after resume:', ctx.state);
                     if (!self._isRunning && ctx.state === 'running') { self._play(); }
                     else if (!self._isRunning) { setTimeout(poll, 200); }
                 });
@@ -297,22 +304,40 @@ class LoopedSound {
 
     _play() {
         if (this._isRunning || !this._buffer) {
-            console.warn('[LoopedSound] _play() called but isRunning:', this._isRunning, 'buffer:', !!this._buffer);
+            console.warn('[StaticSound] _play() called but isRunning:', this._isRunning, 'buffer:', !!this._buffer);
             return;
         }
         this._isRunning = true;
-        console.log('[LoopedSound] _play() starting. crossfade:', this.crossfade, '| bufferDuration:', this._buffer.duration.toFixed(3));
+        console.log('[StaticSound] _play() starting. loop:', this.loop, '| crossfade:', this.crossfade, '| timeOffset:', this.timeOffset, '| bufferDuration:', this._buffer.duration.toFixed(3));
 
-        if (this.crossfade <= 0) {
+        if (!this.loop) {
+            // One-shot: play once from timeOffset then stop
+            var src = this._ctx.createBufferSource();
+            src.buffer = this._buffer;
+            src.loop = false;
+            src.playbackRate.value = this.playbackRate;
+            src.connect(this._masterGain);
+            src.start(0, this.timeOffset);
+            var self = this;
+            src.onended = function () {
+                self._isRunning = false;
+                var idx = self._activeSources.indexOf(src);
+                if (idx !== -1) { self._activeSources.splice(idx, 1); }
+                console.log('[StaticSound] one-shot playback ended');
+            };
+            this._activeSources.push(src);
+            console.log('[StaticSound] One-shot started from offset:', this.timeOffset);
+        } else if (this.crossfade <= 0) {
             // Single looping node — Web Audio handles the loop point exactly, fully JS-freeze-proof.
             var src = this._ctx.createBufferSource();
             src.buffer = this._buffer;
             src.loop = true;
+            src.loopStart = this.timeOffset;
             src.playbackRate.value = this.playbackRate;
             src.connect(this._masterGain);
-            src.start(0);
+            src.start(0, this.timeOffset);
             this._activeSources.push(src);
-            console.log('[LoopedSound] Native loop started');
+            console.log('[StaticSound] Native loop started from offset:', this.timeOffset);
         } else {
             // Look-ahead scheduler: runs every 25ms, schedules instances 150ms ahead on
             // the audio clock. Immune to JS-thread freezes — if we fall behind we just
@@ -327,7 +352,7 @@ class LoopedSound {
         if (!this._isRunning) { return; }
         var ctx = this._ctx;
         var lookahead = 0.15; // seconds to schedule ahead
-        var duration = this._buffer.duration / this.playbackRate;
+        var duration = (this._buffer.duration - this.timeOffset) / this.playbackRate;
         // crossfade is a 0-1 fraction: crossfadeSecs = crossfade * (duration / 2)
         // At crossfade=1, each instance fades for duration/2 and the next starts at the midpoint.
         var crossfadeSecs = this.crossfade * (duration / 2);
@@ -335,7 +360,7 @@ class LoopedSound {
 
         // If JS was frozen and we're badly behind, snap forward to avoid a burst
         if (this._nextAudioStart < ctx.currentTime - period) {
-            console.log('[LoopedSound] scheduler behind by', (ctx.currentTime - this._nextAudioStart).toFixed(3), 's — snapping forward');
+            console.log('[StaticSound] scheduler behind by', (ctx.currentTime - this._nextAudioStart).toFixed(3), 's — snapping forward');
             this._nextAudioStart = ctx.currentTime;
         }
 
@@ -354,10 +379,10 @@ class LoopedSound {
         var ctx = this._ctx;
         var self = this;
         var t = Math.max(audioStartTime, ctx.currentTime);
-        var duration = this._buffer.duration / this.playbackRate;
+        var duration = (this._buffer.duration - this.timeOffset) / this.playbackRate;
         var crossfadeSecs = this.crossfade * (duration / 2);
 
-        console.log('[LoopedSound] scheduling instance #' + this._instanceCount,
+        console.log('[StaticSound] scheduling instance #' + this._instanceCount,
             '| t:', t.toFixed(3), '| duration:', duration.toFixed(3),
             '| crossfadeSecs:', crossfadeSecs.toFixed(3), '| isFirst:', isFirst);
 
@@ -380,7 +405,7 @@ class LoopedSound {
             gain.gain.linearRampToValueAtTime(0, t + duration);
         }
 
-        src.start(t);
+        src.start(t, self.timeOffset);
         src.stop(t + duration);
 
         var srcRef = src;
@@ -390,7 +415,7 @@ class LoopedSound {
             gainRef.disconnect();
             var idx = self._activeSources.indexOf(srcRef);
             if (idx !== -1) { self._activeSources.splice(idx, 1); }
-            console.log('[LoopedSound] instance ended | active:', self._activeSources.length);
+            console.log('[StaticSound] instance ended | active:', self._activeSources.length);
         };
     }
 

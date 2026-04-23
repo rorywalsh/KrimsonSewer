@@ -16,7 +16,7 @@ All sound logic lives in `audioClasses.js`. There are five sound types you can p
 | `AreaSound` | Looping ambient sound that fades in/out as you enter/leave a sphere |
 | `OneShotCollisionSound` | One-shot sound triggered when the player walks into a box zone |
 | `RandomNonSpatialSound` | Non-spatial sound played at random intervals |
-| `LoopedSound` | Continuously looping sound with optional crossfade |
+| `StaticSound` | Non-spatial sound with optional looping, crossfade, and time offset |
 | `FootstepSystem` | Automatic footstep sounds that react to the surface underfoot |
 
 Sounds are defined in `sounds.js` inside the `initSounds()` function. Use the visual editor to design your layout, then paste the generated code into that file.
@@ -89,16 +89,18 @@ Plays sounds at random intervals. Not spatially positioned — heard equally eve
 | Pitch Variation | Random ± offset applied to pitch each play |
 | Amplitude Variation | Random ± offset applied to volume each play |
 
-### LoopedSound
+### StaticSound
 
-Continuously loops a single file. Not spatially positioned.
+A non-spatial sound that plays once by default. Enable **Loop** to loop it continuously. An optional crossfade smooths the loop point.
 
 | Option | Description |
 |---|---|
 | File | Single audio file path |
 | Volume | Master volume (0–1) |
+| Loop | When enabled the sound loops continuously; when disabled it plays once |
+| Time Offset (s) | Position in seconds within the audio file at which playback begins |
 | Playback Rate | Pitch multiplier (1 = normal) |
-| Crossfade | 0–1 fraction of the clip length used for fade in/out at each loop point. 0 = hard loop, 1 = maximum crossfade. |
+| Crossfade | 0–1 fraction of the (offset-adjusted) clip length used for fade in/out at each loop point. 0 = hard loop, 1 = maximum crossfade. Only used when Loop is enabled. |
 
 ### FootstepSystem
 

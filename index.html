@@ -406,7 +406,7 @@
                 <label><input type="radio" name="soundType" value="AreaSound" checked> AreaSound</label>
                 <label><input type="radio" name="soundType" value="OneShotCollisionSound"> OneShotCollision</label>
                 <label><input type="radio" name="soundType" value="RandomNonSpatialSound"> Random</label>
-                <label><input type="radio" name="soundType" value="LoopedSound"> Looped</label>
+                <label><input type="radio" name="soundType" value="StaticSound"> Static</label>
             </div>
         </div>
         <div class="ep-section">
@@ -458,12 +458,18 @@
             <input type="range" id="soundAmplitudeVariation" min="0" max="1" step="0.05" value="0.3">
         </div>
         <div id="loopedOptions" class="ep-section" style="display:none">
-            <div class="ep-row"><span class="ep-label">Playback Speed</span><span id="loopPlaybackRateVal">1.0</span>
+            <div class="ep-row" style="margin-top:6px">
+                <span class="ep-label">Loop</span>
+                <label style="font-size:11px;color:#aaa"><input type="checkbox" id="soundLoop"> enabled</label>
+            </div>
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Time Offset (s)</span><span id="loopTimeOffsetVal">0</span></div>
+            <input type="range" id="soundTimeOffset" min="0" max="60" step="0.1" value="0">
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Playback Speed</span><span id="loopPlaybackRateVal">1.0</span>
             </div>
             <input type="range" id="soundLoopPlaybackRate" min="0.1" max="2" step="0.05" value="1.0">
             <div class="ep-row" style="margin-top:6px"><span class="ep-label">Crossfade</span><span
-                    id="loopCrossfadeVal">0.5</span></div>
-            <input type="range" id="soundLoopCrossfade" min="0" max="1" step="0.01" value="0.5">
+                    id="loopCrossfadeVal">0</span></div>
+            <input type="range" id="soundLoopCrossfade" min="0" max="1" step="0.01" value="0">
         </div>
         <div id="positionControls" class="ep-section" style="display:none">
             <span class="ep-label">Position</span>
@@ -888,12 +894,12 @@
                             if (placedSounds.some(function (ps) { return ps._source === rs; })) return;
                             var isArea = rs instanceof AreaSound;
                             var isRandom = rs instanceof RandomNonSpatialSound;
-                            var isLooped = rs instanceof LoopedSound;
+                            var isStatic = rs instanceof StaticSound;
                             var isOneShot = rs instanceof OneShotCollisionSound;
                             var index = placedSounds.length;
                             var config = {
                                 _source: rs,
-                                type: isArea ? 'AreaSound' : (isRandom ? 'RandomNonSpatialSound' : (isLooped ? 'LoopedSound' : 'OneShotCollisionSound')),
+                                type: isArea ? 'AreaSound' : (isRandom ? 'RandomNonSpatialSound' : (isStatic ? 'StaticSound' : 'OneShotCollisionSound')),
                                 volume: rs.volume || 0.5
                             };
 
@@ -906,8 +912,10 @@
                                 config.baseAmplitude = rs.baseAmplitude;
                                 config.amplitudeVariation = rs.amplitudeVariation;
                                 config.ghostMesh = null;
-                            } else if (isLooped) {
+                            } else if (isStatic) {
                                 config.file = rs.file;
+                                config.loop = rs.loop;
+                                config.timeOffset = rs.timeOffset;
                                 config.playbackRate = rs.playbackRate;
                                 config.crossfade = rs.crossfade;
                                 config.ghostMesh = null;
@@ -949,9 +957,9 @@
                                         var idx = placedSounds.length;
                                         var isArea = data.type === 'AreaSound';
                                         var isRandom = data.type === 'RandomNonSpatialSound';
-                                        var isLooped = data.type === 'LoopedSound';
+                                        var isStatic = data.type === 'StaticSound';
 
-                                        if (!isRandom && !isLooped) {
+                                        if (!isRandom && !isStatic) {
                                             var ghostMat = new BABYLON.StandardMaterial('ghostMat_r' + idx, scene);
                                             ghostMat.wireframe = true;
                                             ghostMat.emissiveColor = isArea ? new BABYLON.Color3(0, 0.8, 0.8) : new BABYLON.Color3(1, 0.8, 0);
@@ -1185,7 +1193,20 @@
             }
         });
 
-        // Looped sound controls
+        // Static sound controls
+        document.getElementById('soundLoop').addEventListener('change', function () {
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].loop = this.checked;
+                generateCode();
+            }
+        });
+        document.getElementById('soundTimeOffset').addEventListener('input', function () {
+            document.getElementById('loopTimeOffsetVal').textContent = parseFloat(this.value).toFixed(1);
+            if (selectedSoundIndex !== -1) {
+                placedSounds[selectedSoundIndex].timeOffset = parseFloat(this.value);
+                generateCode();
+            }
+        });
         document.getElementById('soundLoopPlaybackRate').addEventListener('input', function () {
             document.getElementById('loopPlaybackRateVal').textContent = this.value;
             if (selectedSoundIndex !== -1) {
@@ -1278,18 +1299,18 @@
             });
         });
 
-        // Toggle area/oneshot/random/looped options
+        // Toggle area/oneshot/random/static options
         document.querySelectorAll('input[name="soundType"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
                 var isArea = this.value === 'AreaSound';
                 var isOneShot = this.value === 'OneShotCollisionSound';
                 var isRandom = this.value === 'RandomNonSpatialSound';
-                var isLooped = this.value === 'LoopedSound';
-                var isNonSpatial = isRandom || isLooped;
+                var isStatic = this.value === 'StaticSound';
+                var isNonSpatial = isRandom || isStatic;
                 document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
                 document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
                 document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
-                document.getElementById('loopedOptions').style.display = isLooped ? 'block' : 'none';
+                document.getElementById('loopedOptions').style.display = isStatic ? 'block' : 'none';
                 document.getElementById('positionControls').style.display = isNonSpatial ? 'none' : (selectedSoundIndex !== -1 ? 'block' : 'none');
             });
         });
@@ -1307,7 +1328,7 @@
             };
 
             // Non-spatial sounds don't have position
-            var isNonSpatial = type === 'RandomNonSpatialSound' || type === 'LoopedSound';
+            var isNonSpatial = type === 'RandomNonSpatialSound' || type === 'StaticSound';
             if (!isNonSpatial) {
                 var pos = scene.activeCamera.position;
                 config.x = parseFloat(pos.x.toFixed(2));
@@ -1340,7 +1361,9 @@
                 config.amplitudeVariation = parseFloat(document.getElementById('soundAmplitudeVariation').value);
                 // No ghost mesh for non-spatial sounds
                 config.ghostMesh = null;
-            } else if (type === 'LoopedSound') {
+            } else if (type === 'StaticSound') {
+                config.loop = document.getElementById('soundLoop').checked;
+                config.timeOffset = parseFloat(document.getElementById('soundTimeOffset').value);
                 config.playbackRate = parseFloat(document.getElementById('soundLoopPlaybackRate').value);
                 config.crossfade = parseFloat(document.getElementById('soundLoopCrossfade').value);
                 // No ghost mesh for non-spatial sounds
@@ -1440,12 +1463,14 @@
                         amplitudeVariation: config.amplitudeVariation !== undefined ? config.amplitudeVariation : 0.3,
                         autoStart: true
                     });
-                } else if (config.type === 'LoopedSound') {
-                    config._source = new LoopedSound({
+                } else if (config.type === 'StaticSound') {
+                    config._source = new StaticSound({
                         file: files[0],
                         volume: config.volume !== undefined ? config.volume : 0.5,
+                        loop: config.loop !== undefined ? config.loop : false,
+                        timeOffset: config.timeOffset !== undefined ? config.timeOffset : 0,
                         playbackRate: config.playbackRate !== undefined ? config.playbackRate : 1.0,
-                        crossfade: config.crossfade !== undefined ? config.crossfade : 0.5,
+                        crossfade: config.crossfade !== undefined ? config.crossfade : 0,
                         autoStart: true
                     });
                 }
@@ -1471,10 +1496,8 @@
             } else if (src instanceof RandomNonSpatialSound) {
                 src.stop();
                 if (src.sounds) src.sounds.forEach(function (s) { try { s.stop(); s.dispose(); } catch (e) { } });
-            } else if (src instanceof LoopedSound) {
+            } else if (src instanceof StaticSound) {
                 src.stop();
-                if (src.currentSound) { try { src.currentSound.stop(); src.currentSound.dispose(); } catch (e) { } }
-                if (src.nextSound) { try { src.nextSound.stop(); src.nextSound.dispose(); } catch (e) { } }
             }
             var idx = (window._registeredSounds || []).indexOf(src);
             if (idx !== -1) window._registeredSounds.splice(idx, 1);
@@ -1526,7 +1549,7 @@
             }
 
             // Teleport camera to look at the sound (only for spatial sounds)
-            if (s.type !== 'RandomNonSpatialSound' && s.type !== 'LoopedSound') {
+            if (s.type !== 'RandomNonSpatialSound' && s.type !== 'StaticSound') {
                 arcRotateCamera.target = new BABYLON.Vector3(s.x, s.y, s.z);
             }
 
@@ -1539,12 +1562,12 @@
             var isArea = s.type === 'AreaSound';
             var isOneShot = s.type === 'OneShotCollisionSound';
             var isRandom = s.type === 'RandomNonSpatialSound';
-            var isLooped = s.type === 'LoopedSound';
+            var isStatic = s.type === 'StaticSound';
 
             document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
             document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
             document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
-            document.getElementById('loopedOptions').style.display = isLooped ? 'block' : 'none';
+            document.getElementById('loopedOptions').style.display = isStatic ? 'block' : 'none';
 
             if (isArea) {
                 document.getElementById('soundRolloff').value = s.rolloff;
@@ -1572,23 +1595,26 @@
                 document.getElementById('baseAmplitudeVal').textContent = s.baseAmplitude !== undefined ? s.baseAmplitude : 0.5;
                 document.getElementById('soundAmplitudeVariation').value = s.amplitudeVariation !== undefined ? s.amplitudeVariation : 0.3;
                 document.getElementById('amplitudeVariationVal').textContent = s.amplitudeVariation !== undefined ? s.amplitudeVariation : 0.3;
-            } else if (isLooped) {
+            } else if (isStatic) {
+                document.getElementById('soundLoop').checked = s.loop !== undefined ? s.loop : false;
+                document.getElementById('soundTimeOffset').value = s.timeOffset !== undefined ? s.timeOffset : 0;
+                document.getElementById('loopTimeOffsetVal').textContent = (s.timeOffset !== undefined ? s.timeOffset : 0).toFixed !== undefined ? parseFloat(s.timeOffset || 0).toFixed(1) : '0.0';
                 document.getElementById('soundLoopPlaybackRate').value = s.playbackRate !== undefined ? s.playbackRate : 1.0;
                 document.getElementById('loopPlaybackRateVal').textContent = s.playbackRate !== undefined ? s.playbackRate : 1.0;
-                document.getElementById('soundLoopCrossfade').value = s.crossfade !== undefined ? s.crossfade : 0.5;
-                document.getElementById('loopCrossfadeVal').textContent = s.crossfade !== undefined ? s.crossfade : 0.5;
+                document.getElementById('soundLoopCrossfade').value = s.crossfade !== undefined ? s.crossfade : 0;
+                document.getElementById('loopCrossfadeVal').textContent = s.crossfade !== undefined ? s.crossfade : 0;
             }
 
             // Position controls only for spatial sounds
-            posControls.style.display = (isRandom || isLooped) ? 'none' : 'block';
-            if (!isRandom && !isLooped) {
+            posControls.style.display = (isRandom || isStatic) ? 'none' : 'block';
+            if (!isRandom && !isStatic) {
                 document.getElementById('posX').value = s.x;
                 document.getElementById('posY').value = s.y;
                 document.getElementById('posZ').value = s.z;
             }
 
             bar.style.display = 'flex';
-            var typeName = isArea ? 'AreaSound' : (isOneShot ? 'OneShotCollision' : (isRandom ? 'Random' : 'Looped'));
+            var typeName = isArea ? 'AreaSound' : (isOneShot ? 'OneShotCollision' : (isRandom ? 'Random' : 'Static'));
             bar.innerHTML = '<span>Editing: ' + typeName + ' #' + (i + 1) + '</span>' +
                 '<button id="deselectBtn">✕ deselect</button>';
             document.getElementById('deselectBtn').addEventListener('click', function () { selectSound(-1); });
@@ -1605,11 +1631,11 @@
                 item.className = 'sound-item' + (i === selectedSoundIndex ? ' selected' : '');
                 var isArea = s.type === 'AreaSound';
                 var isRandom = s.type === 'RandomNonSpatialSound';
-                var isLooped = s.type === 'LoopedSound';
+                var isStatic = s.type === 'StaticSound';
                 var fileName = s.file.split('/').pop().split(',')[0];
-                var badgeClass = isArea ? 'area' : (isRandom ? 'random' : (isLooped ? 'looped' : 'oneshot'));
-                var badgeText = isArea ? 'AREA' : (isRandom ? 'RAND' : (isLooped ? 'LOOP' : 'SHOT'));
-                var posText = (isRandom || isLooped) ? '(non-spatial)' : '(' + s.x + ', ' + s.y + ', ' + s.z + ')';
+                var badgeClass = isArea ? 'area' : (isRandom ? 'random' : (isStatic ? 'looped' : 'oneshot'));
+                var badgeText = isArea ? 'AREA' : (isRandom ? 'RAND' : (isStatic ? 'STAT' : 'SHOT'));
+                var posText = (isRandom || isStatic) ? '(non-spatial)' : '(' + s.x + ', ' + s.y + ', ' + s.z + ')';
                 item.innerHTML =
                     '<span class="si-badge ' + badgeClass + '">' +
                     badgeText +
@@ -1642,7 +1668,7 @@
             var areaSounds = placedSounds.filter(function (s) { return s.type === 'AreaSound'; });
             var oneShotSounds = placedSounds.filter(function (s) { return s.type === 'OneShotCollisionSound'; });
             var randomSounds = placedSounds.filter(function (s) { return s.type === 'RandomNonSpatialSound'; });
-            var loopedSounds = placedSounds.filter(function (s) { return s.type === 'LoopedSound'; });
+            var staticSounds = placedSounds.filter(function (s) { return s.type === 'StaticSound'; });
             var inner = [];
 
             if (areaSounds.length > 0) {
@@ -1689,11 +1715,13 @@
                 });
             }
 
-            if (loopedSounds.length > 0) {
-                inner.push('    let loopedSounds = [];');
-                loopedSounds.forEach(function (s) {
-                    inner.push('    loopedSounds.push(new LoopedSound({ file: "' + s.file +
+            if (staticSounds.length > 0) {
+                inner.push('    let staticSounds = [];');
+                staticSounds.forEach(function (s) {
+                    inner.push('    staticSounds.push(new StaticSound({ file: "' + s.file +
                         '", volume: ' + (s.volume !== undefined ? s.volume : 1.0) +
+                        ', loop: ' + (s.loop ? 'true' : 'false') +
+                        ', timeOffset: ' + (s.timeOffset !== undefined ? s.timeOffset : 0) +
                         ', playbackRate: ' + (s.playbackRate !== undefined ? s.playbackRate : 1.0) +
                         ', crossfade: ' + (s.crossfade !== undefined ? s.crossfade : 0) +
                         ', autoStart: true }));');
