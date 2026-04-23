@@ -442,6 +442,18 @@ class StaticSound {
     }
 }
 
+/*
+ * LoopedSound — backward-compatibility alias for StaticSound.
+ * Existing code that creates a LoopedSound will get a StaticSound with loop:true
+ * and timeOffset:0. All parameters are forwarded as-is.
+ */
+class LoopedSound extends StaticSound {
+    constructor(args) {
+        // Ensure loop defaults to true unless the caller explicitly passes false
+        super(Object.assign({ loop: true }, args));
+    }
+}
+
 /* 
  * RandomNonSpatialSound - plays sounds at random intervals with pitch/amplitude variation
  * 
