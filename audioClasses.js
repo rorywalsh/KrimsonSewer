@@ -29,7 +29,7 @@ class OneShotCollisionSound {
         this.h = (typeof args.h === 'undefined' ? .1 : args.h);
         this.color = (typeof args.color === 'undefined' ? 'white' : args.color);
         this.visible = (typeof args.visible === 'undefined' ? true : args.visible);
-        this.name = (typeof args.name === 'undefined' ? args.file[0] : args.name);
+        this.name = (typeof args.name === 'undefined' ? (Array.isArray(args.file) ? args.file[0] : args.file) : args.name);
         this.volume = (typeof args.volume === 'undefined' ? 0.5 : args.volume);
         this.timeBetweenPlays = (typeof args.timeBetweenPlays === 'undefined' ? 2000 : args.secondsBeforeNextPlay * 1000);
         this.rolloff = (typeof args.rolloff === 'undefined' ? 0 : args.rolloff);
