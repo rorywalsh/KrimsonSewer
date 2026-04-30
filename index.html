@@ -928,11 +928,10 @@
                                 config.x = parseFloat(pos.x.toFixed(2));
                                 config.y = parseFloat(pos.y.toFixed(2));
                                 config.z = parseFloat(pos.z.toFixed(2));
-                                config.rolloff = isArea ? rs.rolloff : undefined;
+                                config.rolloff = isArea ? rs.rolloff : (isOneShot ? (rs.rolloff || 0) : undefined);
                                 config.minDistance = isArea ? rs.minDistance : undefined;
                                 config.w = isOneShot ? rs.w : undefined;
                                 config.timeBetweenPlays = isOneShot ? rs.timeBetweenPlays : undefined;
-                                config.rolloff = isOneShot ? (rs.rolloff || 0) : undefined;
 
                                 var ghostMat = new BABYLON.StandardMaterial('ghostMat_' + index, scene);
                                 ghostMat.wireframe = true;
@@ -1551,6 +1550,13 @@
             // Teleport camera to look at the sound (only for spatial sounds)
             if (s.type !== 'RandomNonSpatialSound' && s.type !== 'StaticSound') {
                 arcRotateCamera.target = new BABYLON.Vector3(s.x, s.y, s.z);
+                if (s.type === 'AreaSound') {
+                    // Place camera inside the sphere at the minDistance radius
+                    arcRotateCamera.radius = Math.max(s.minDistance || 1, 0.5);
+                } else {
+                    // Place camera just inside the trigger box
+                    arcRotateCamera.radius = (s.w || 3) * 0.5;
+                }
             }
 
             // Populate controls

@@ -112,11 +112,12 @@ class AreaSound {
         this.sphere.material = new BABYLON.StandardMaterial("Mat", _scene);
         const [, r, g, b, a] = colorKeywordToRGB(this.color).replace(/\s/g, "").match(/rgba?\((\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?\)/i);
         this.sphere.material.emissiveColor = new BABYLON.Color3(r, g, b, .5);
-        this.sphere.material.alpha = 0.1;
-        if (this.visible)
+        if (this.visible) {
             this.sphere.material.wireframe = true;
-        else
+            this.sphere.material.alpha = 1;
+        } else {
             this.sphere.material.alpha = 0;
+        }
 
         //this.sphere.scaling = new BABYLON.Vector3(this.w, 1, this.h);
         this.sphere.position = new BABYLON.Vector3(args.x, this.y, args.z);
