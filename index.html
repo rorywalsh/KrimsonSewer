@@ -417,7 +417,7 @@
             </div>
             <input type="file" id="soundFilePicker" accept="audio/*" style="display:none">
         </div>
-        <div class="ep-section">
+        <div class="ep-section" id="volumeSection">
             <div class="ep-row"><span class="ep-label">Volume</span><span id="volumeVal">0.5</span></div>
             <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5">
         </div>
@@ -834,11 +834,21 @@
                     var dy = e.clientY - editDownY;
                     if (Math.sqrt(dx * dx + dy * dy) < 5) {
                         var pickResult = scene.pick(e.clientX, e.clientY);
-                        if (pickResult.hit && pickResult.pickedMesh) {
-                            var idx = placedSounds.findIndex(function (s) { return s.ghostMesh === pickResult.pickedMesh; });
-                            selectSound(idx !== -1 ? idx : -1);
+                        // Only count a pick as meaningful if it hit an editor ghost mesh.
+                        // Hitting scene geometry (floor, walls) should be treated the same as
+                        // hitting nothing, so that non-spatial sounds (Random/Static) aren't
+                        // deselected just because the user orbited the camera.
+                        var hitGhostIdx = (pickResult.hit && pickResult.pickedMesh)
+                            ? placedSounds.findIndex(function (s) { return s.ghostMesh === pickResult.pickedMesh; })
+                            : -1;
+                        if (hitGhostIdx !== -1) {
+                            selectSound(hitGhostIdx);
                         } else {
-                            selectSound(-1);
+                            var currSelected = selectedSoundIndex !== -1 ? placedSounds[selectedSoundIndex] : null;
+                            var isNonSpatial = currSelected && (currSelected.type === 'RandomNonSpatialSound' || currSelected.type === 'StaticSound');
+                            if (!isNonSpatial) {
+                                selectSound(-1);
+                            }
                         }
                     }
                 }
@@ -1306,6 +1316,7 @@
                 var isRandom = this.value === 'RandomNonSpatialSound';
                 var isStatic = this.value === 'StaticSound';
                 var isNonSpatial = isRandom || isStatic;
+                document.getElementById('volumeSection').style.display = isRandom ? 'none' : 'block';
                 document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
                 document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
                 document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
@@ -1570,6 +1581,7 @@
             var isRandom = s.type === 'RandomNonSpatialSound';
             var isStatic = s.type === 'StaticSound';
 
+            document.getElementById('volumeSection').style.display = isRandom ? 'none' : 'block';
             document.getElementById('areaOptions').style.display = isArea ? 'block' : 'none';
             document.getElementById('oneShotOptions').style.display = isOneShot ? 'block' : 'none';
             document.getElementById('randomOptions').style.display = isRandom ? 'block' : 'none';
