@@ -235,6 +235,8 @@ class StaticSound {
         this.crossfade = (typeof args.crossfade === 'number') ? Math.max(0, Math.min(1, args.crossfade)) : 0;
         // timeOffset: seconds into the audio file at which playback begins
         this.timeOffset = (typeof args.timeOffset === 'number') ? Math.max(0, args.timeOffset) : 0;
+        // autoStart: if false, load the buffer but don't begin playback until play() is called
+        this.autoStart = (typeof args.autoStart === 'boolean') ? args.autoStart : true;
 
         this._ctx = null;
         this._masterGain = null;
@@ -268,7 +270,7 @@ class StaticSound {
             .then(function (buffer) {
                 self._buffer = buffer;
                 console.log('[StaticSound] Buffer decoded. Duration:', buffer.duration.toFixed(3), 's | playbackRate:', self.playbackRate, '| loop:', self.loop, '| crossfade:', self.crossfade, '| timeOffset:', self.timeOffset);
-                self._startWhenUnlocked();
+                if (self.autoStart) { self._startWhenUnlocked(); }
             })
             .catch(function (e) { console.warn('[StaticSound] Failed to load', self.file, e); });
     }
@@ -284,6 +286,7 @@ class StaticSound {
             return;
         }
 
+        // Listen for BabylonJS audio unlock (fired when user first interacts with the canvas)
         var audioEngine = BABYLON.Engine.audioEngine;
         if (audioEngine && audioEngine.onAudioUnlockedObservable) {
             console.log('[StaticSound] Waiting for BabylonJS audio unlock...');
@@ -291,16 +294,17 @@ class StaticSound {
                 console.log('[StaticSound] Audio unlocked via BabylonJS, ctx.state:', ctx.state);
                 if (!self._isRunning) { self._play(); }
             });
-        } else {
-            console.log('[StaticSound] No onAudioUnlockedObservable, polling...');
-            (function poll() {
-                ctx.resume().then(function () {
-                    console.log('[StaticSound] poll: ctx.state after resume:', ctx.state);
-                    if (!self._isRunning && ctx.state === 'running') { self._play(); }
-                    else if (!self._isRunning) { setTimeout(poll, 200); }
-                });
-            })();
         }
+        // Also listen for the first user gesture directly, in case there are no
+        // BabylonJS sounds in the scene to trigger the observable above.
+        var unlockEvents = ['click', 'keydown', 'touchstart', 'pointerdown'];
+        function onUserGesture() {
+            unlockEvents.forEach(function (e) { document.removeEventListener(e, onUserGesture); });
+            ctx.resume().then(function () {
+                if (!self._isRunning && ctx.state === 'running') { self._play(); }
+            });
+        }
+        unlockEvents.forEach(function (e) { document.addEventListener(e, onUserGesture, { once: true, passive: true }); });
     }
 
     _play() {
