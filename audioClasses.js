@@ -31,7 +31,7 @@ class OneShotCollisionSound {
         this.visible = (typeof args.visible === 'undefined' ? true : args.visible);
         this.name = (typeof args.name === 'undefined' ? (Array.isArray(args.file) ? args.file[0] : args.file) : args.name);
         this.volume = (typeof args.volume === 'undefined' ? 0.5 : args.volume);
-        this.timeBetweenPlays = (typeof args.timeBetweenPlays === 'undefined' ? 2000 : args.secondsBeforeNextPlay * 1000);
+        this.timeBetweenPlays = (typeof args.timeBetweenPlays === 'undefined' ? 2000 : args.timeBetweenPlays);
         this.rolloff = (typeof args.rolloff === 'undefined' ? 0 : args.rolloff);
         this.sounds = [];
         this.position = new BABYLON.Vector3(args.x, this.y, args.z);
