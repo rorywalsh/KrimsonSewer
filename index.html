@@ -936,7 +936,7 @@
                                 var mesh = isArea ? rs.sphere : rs.box;
                                 var pos = mesh ? mesh.position : rs.position;
                                 config.file = isArea
-                                    ? rs.sound.name
+                                    ? (Array.isArray(rs.sound.name) ? rs.sound.name.join(', ') : rs.sound.name)
                                     : (rs.sounds.length ? rs.sounds.map(function (s) { return s.name; }).join(', ') : rs.sound.name);
                                 config.x = parseFloat(pos.x.toFixed(2));
                                 config.y = parseFloat(pos.y.toFixed(2));
@@ -1653,9 +1653,9 @@
                 var isArea = s.type === 'AreaSound';
                 var isRandom = s.type === 'RandomNonSpatialSound';
                 var isStatic = s.type === 'StaticSound';
-                // Handle both file (string) and files (array) properties
-                var fileString = isRandom ? (Array.isArray(s.files) ? s.files[0] : s.files) : s.file;
-                var fileName = fileString ? fileString.split('/').pop().split(',')[0] : 'unknown';
+                // Handle both string and array file properties
+                var fileStr = Array.isArray(s.file) ? s.file[0] : s.file;
+                var fileName = (fileStr && typeof fileStr === 'string') ? fileStr.split('/').pop().split(',')[0] : 'unknown';
                 var badgeClass = isArea ? 'area' : (isRandom ? 'random' : (isStatic ? 'looped' : 'oneshot'));
                 var badgeText = isArea ? 'AREA' : (isRandom ? 'RAND' : (isStatic ? 'STAT' : 'SHOT'));
                 var posText = (isRandom || isStatic) ? '(non-spatial)' : '(' + s.x + ', ' + s.y + ', ' + s.z + ')';
@@ -1697,7 +1697,8 @@
             if (areaSounds.length > 0) {
                 inner.push('    let areaSounds = [];');
                 areaSounds.forEach(function (s) {
-                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
+                    var fileArray = Array.isArray(s.file) ? s.file : (typeof s.file === 'string' ? s.file.split(',') : [s.file]);
+                    var files = fileArray.map(function (f) { return '"' + (typeof f === 'string' ? f.trim() : f) + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
                     inner.push('    areaSounds.push(new AreaSound({ file: ' + fileStr +
                         ', x: ' + s.x + ', y: ' + s.y + ', z: ' + s.z +
@@ -1710,7 +1711,8 @@
             if (oneShotSounds.length > 0) {
                 inner.push('    let triggerSounds = [];');
                 oneShotSounds.forEach(function (s) {
-                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
+                    var fileArray = Array.isArray(s.file) ? s.file : (typeof s.file === 'string' ? s.file.split(',') : [s.file]);
+                    var files = fileArray.map(function (f) { return '"' + (typeof f === 'string' ? f.trim() : f) + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
                     var osRolloffStr = (s.rolloff && s.rolloff > 0) ? ', rolloff: ' + s.rolloff : '';
                     inner.push('    triggerSounds.push(new OneShotCollisionSound({ file: ' + fileStr +
@@ -1725,7 +1727,8 @@
             if (randomSounds.length > 0) {
                 inner.push('    let randomSounds = [];');
                 randomSounds.forEach(function (s) {
-                    var files = s.file.split(',').map(function (f) { return '"' + f.trim() + '"'; });
+                    var fileArray = Array.isArray(s.file) ? s.file : (typeof s.file === 'string' ? s.file.split(',') : [s.file]);
+                    var files = fileArray.map(function (f) { return '"' + (typeof f === 'string' ? f.trim() : f) + '"'; });
                     var fileStr = files.length > 1 ? '[' + files.join(', ') + ']' : files[0];
                     inner.push('    randomSounds.push(new RandomNonSpatialSound({ file: ' + fileStr +
                         ', minInterval: ' + (s.minInterval !== undefined ? s.minInterval : 2000) +
@@ -1741,7 +1744,8 @@
             if (staticSounds.length > 0) {
                 inner.push('    let staticSounds = [];');
                 staticSounds.forEach(function (s) {
-                    inner.push('    staticSounds.push(new StaticSound({ file: "' + s.file +
+                    var fileStr = Array.isArray(s.file) ? s.file[0] : s.file;
+                    inner.push('    staticSounds.push(new StaticSound({ file: "' + fileStr +
                         '", volume: ' + (s.volume !== undefined ? s.volume : 1.0) +
                         ', loop: ' + (s.loop ? 'true' : 'false') +
                         ', timeOffset: ' + (s.timeOffset !== undefined ? s.timeOffset : 0) +
