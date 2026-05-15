@@ -434,7 +434,8 @@
             <div class="ep-row" style="margin-top:6px"><span class="ep-label">Cooldown (ms)</span><span
                     id="cooldownVal">2000</span></div>
             <input type="range" id="soundCooldown" min="-1" max="10000" step="500" value="2000">
-            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Area Rolloff</span><span id="oneShotRolloffVal">off</span></div>
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Area Rolloff</span><span
+                    id="oneShotRolloffVal">off</span></div>
             <input type="range" id="oneShotRolloff" min="0" max="10" step="0.5" value="0">
         </div>
         <div id="randomOptions" class="ep-section" style="display:none">
@@ -462,9 +463,11 @@
                 <span class="ep-label">Loop</span>
                 <label style="font-size:11px;color:#aaa"><input type="checkbox" id="soundLoop"> enabled</label>
             </div>
-            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Time Offset (s)</span><span id="loopTimeOffsetVal">0</span></div>
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Time Offset (s)</span><span
+                    id="loopTimeOffsetVal">0</span></div>
             <input type="range" id="soundTimeOffset" min="0" max="60" step="0.1" value="0">
-            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Playback Speed</span><span id="loopPlaybackRateVal">1.0</span>
+            <div class="ep-row" style="margin-top:6px"><span class="ep-label">Playback Speed</span><span
+                    id="loopPlaybackRateVal">1.0</span>
             </div>
             <input type="range" id="soundLoopPlaybackRate" min="0.1" max="2" step="0.05" value="1.0">
             <div class="ep-row" style="margin-top:6px"><span class="ep-label">Crossfade</span><span
@@ -1650,7 +1653,9 @@
                 var isArea = s.type === 'AreaSound';
                 var isRandom = s.type === 'RandomNonSpatialSound';
                 var isStatic = s.type === 'StaticSound';
-                var fileName = s.file.split('/').pop().split(',')[0];
+                // Handle both file (string) and files (array) properties
+                var fileString = isRandom ? (Array.isArray(s.files) ? s.files[0] : s.files) : s.file;
+                var fileName = fileString ? fileString.split('/').pop().split(',')[0] : 'unknown';
                 var badgeClass = isArea ? 'area' : (isRandom ? 'random' : (isStatic ? 'looped' : 'oneshot'));
                 var badgeText = isArea ? 'AREA' : (isRandom ? 'RAND' : (isStatic ? 'STAT' : 'SHOT'));
                 var posText = (isRandom || isStatic) ? '(non-spatial)' : '(' + s.x + ', ' + s.y + ', ' + s.z + ')';
